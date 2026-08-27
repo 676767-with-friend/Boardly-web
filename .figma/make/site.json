@@ -1,0 +1,10 @@
+{
+  "description": "Enables users to interact with a prototype web page designed from provided files, facilitating seamless testing and feedback collection.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
