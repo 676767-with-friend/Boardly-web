@@ -1,0 +1,15 @@
+.git/
+.gitignore
+.env
+.env.*
+!.env.example
+**/node_modules/
+**/dist/
+**/target/
+**/*.log
+.idea/
+.vscode/
+*.iml
+*.tmp
+*.temp
+docs/

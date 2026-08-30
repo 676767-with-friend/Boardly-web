@@ -1,0 +1,7 @@
+spring:
+  jpa:
+    show-sql: true
+
+boardly:
+  auth:
+    dev-reset-token-exposure: true

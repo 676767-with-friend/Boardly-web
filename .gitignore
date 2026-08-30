@@ -1,16 +1,48 @@
+# Secrets
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/vite.config.*.timestamp-*
+frontend/*.tsbuildinfo
+.pnpm-store/
 node_modules/
 dist/
-build/
-.cache/
-.env*
-.vite/
-vite.config.*.timestamp-*
-*.tsbuildinfo
+coverage/
+
+# Backend
+backend/target/
+target/
+
+# Database
+database/*.bak
+
+# Logs
+*.log
 *-debug.log*
 logs/
-*.log
-.claude-replay.*
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary and caches
+build/
+.cache/
+*.tmp
+*.temp
 .tmp-*
+.claude-replay.*
 
 # Platform-managed agentplat state, not project source. In the
 # client-initiated single-repo workspace layout (make's `Path: "."` spec) the
