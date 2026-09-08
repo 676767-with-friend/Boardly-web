@@ -141,7 +141,10 @@ public class ManagementService {
         OffsetDateTime now = OffsetDateTime.now();
         OffsetDateTime start = now.withOffsetSameInstant(ZoneOffset.UTC).toLocalDate().atStartOfDay().atOffset(ZoneOffset.UTC);
         long activeBranches = branches.findAll().stream().filter(branch -> branch.getStatus() == Branch.BranchStatus.active).count();
-        long activeStaff = users.findAll().stream().filter(user -> user.getStatus() == User.UserStatus.active).filter(user -> userRoles.findActiveRoleCodesByUserId(user.getId()).contains("staff")).count();
+        long activeStaff = users.findAll().stream().filter(user -> user.getStatus() == User.UserStatus.active).filter(user -> {
+            List<String> r = userRoles.findActiveRoleCodesByUserId(user.getId());
+            return r.contains("staff") || r.contains("manager");
+        }).count();
         long activeSessions = sessions.findAll().stream().filter(session -> session.getStatus() == PlaySession.PlaySessionStatus.active).count();
         long reservationsToday = reservations.findAll().stream().filter(reservation -> !reservation.getStartsAt().isBefore(start) && reservation.getStartsAt().isBefore(start.plusDays(1))).count();
         BigDecimal salesToday = orders.findAll().stream().filter(order -> !order.getPlacedAt().isBefore(start) && order.getPlacedAt().isBefore(start.plusDays(1))).map(Order::getTotalAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -166,7 +169,10 @@ public class ManagementService {
 
     @Transactional(readOnly = true)
     public List<StaffResponse> staff() {
-        return users.findAllByOrderByCreatedAtDesc().stream().filter(user -> userRoles.findActiveRoleCodesByUserId(user.getId()).contains("staff")).map(this::staff).toList();
+        return users.findAllByOrderByCreatedAtDesc().stream().filter(user -> {
+            List<String> r = userRoles.findActiveRoleCodesByUserId(user.getId());
+            return r.contains("staff") || r.contains("manager");
+        }).map(this::staff).toList();
     }
 
     @Transactional
@@ -178,17 +184,26 @@ public class ManagementService {
         User user = new User(); user.setFirstName(request.firstName().trim()); user.setLastName(request.lastName().trim());
         user.setDisplayName(blankToNull(request.displayName())); user.setEmail(email); user.setPhone(blankToNull(request.phone()));
         user.setPasswordHash(passwordEncoder.encode(request.password())); user.setStatus(User.UserStatus.active); user.setCreatedAt(now); user.setUpdatedAt(now);
-        user = users.save(user); assignRole(user, "staff", admin.id(), now); replaceAssignments(user, request.branchIds(), request.primaryBranchId(), admin.id(), now);
+        user = users.save(user);
+        String assignedRole = "manager".equalsIgnoreCase(request.role()) ? "manager" : "staff";
+        assignRole(user, assignedRole, admin.id(), now);
+        replaceAssignments(user, request.branchIds(), request.primaryBranchId(), admin.id(), now);
         return staff(user);
     }
 
     @Transactional
     public StaffResponse updateStaff(AuthUser admin, UUID userId, UpdateStaffRequest request) {
         User user = requiredUser(userId);
-        if (!userRoles.findActiveRoleCodesByUserId(userId).contains("staff")) throw notFound("Staff member");
+        List<String> currentRoles = userRoles.findActiveRoleCodesByUserId(userId);
+        if (!currentRoles.contains("staff") && !currentRoles.contains("manager")) throw notFound("Staff member");
         validateBranches(request.branchIds(), request.primaryBranchId());
         user.setFirstName(request.firstName().trim()); user.setLastName(request.lastName().trim()); user.setDisplayName(blankToNull(request.displayName())); user.setPhone(blankToNull(request.phone()));
         user.setStatus(enumValue(User.UserStatus.class, request.status(), "User status")); user.setUpdatedAt(OffsetDateTime.now()); users.save(user);
+        if (request.role() != null && !request.role().isBlank()) {
+            String targetRole = "manager".equalsIgnoreCase(request.role()) ? "manager" : "staff";
+            userRoles.deleteAllByUserId(user.getId());
+            assignRole(user, targetRole, admin.id(), OffsetDateTime.now());
+        }
         replaceAssignments(user, request.branchIds(), request.primaryBranchId(), admin.id(), OffsetDateTime.now()); return staff(user);
     }
 
@@ -236,7 +251,8 @@ public class ManagementService {
     }
 
     @Transactional(readOnly = true)
-    public List<TableZoneResponse> tableZones(UUID branchId) {
+    public List<TableZoneResponse> tableZones(AuthUser user, UUID branchId) {
+        requireTableManagementScope(user, branchId);
         requiredBranch(branchId);
         return zones.findByBranchIdOrderBySortOrderAscNameAsc(branchId).stream()
                 .map(zone -> new TableZoneResponse(zone.getId(), branchId, zone.getName(), zone.getSortOrder()))
@@ -244,19 +260,22 @@ public class ManagementService {
     }
 
     @Transactional(readOnly = true)
-    public List<TableFeatureResponse> tableFeatures() {
+    public List<TableFeatureResponse> tableFeatures(AuthUser user) {
+        requireTableManagementRole(user);
         return features.findByIsActiveTrueOrderByNameAsc().stream()
                 .map(feature -> new TableFeatureResponse(feature.getId(), feature.getName())).toList();
     }
 
     @Transactional(readOnly = true)
-    public List<AdminTableResponse> tables(UUID branchId) {
+    public List<AdminTableResponse> tables(AuthUser user, UUID branchId) {
+        requireTableManagementScope(user, branchId);
         requiredBranch(branchId);
         return tables.findByBranchIdOrderBySortOrderAsc(branchId).stream().map(this::table).toList();
     }
 
     @Transactional
-    public AdminTableResponse createTable(AdminTableRequest request) {
+    public AdminTableResponse createTable(AuthUser user, AdminTableRequest request) {
+        requireTableManagementScope(user, request.branchId());
         validateTableRequest(request);
         if (tables.existsByBranchIdAndCodeIgnoreCase(request.branchId(), request.code().trim())) {
             throw conflict("A table with this code already exists at the selected branch");
@@ -270,9 +289,11 @@ public class ManagementService {
     }
 
     @Transactional
-    public AdminTableResponse updateTable(UUID id, AdminTableRequest request) {
+    public AdminTableResponse updateTable(AuthUser user, UUID id, AdminTableRequest request) {
         validateTableRequest(request);
         StoreTable table = tables.findById(id).orElseThrow(() -> notFound("Table"));
+        requireTableManagementScope(user, table.getBranch().getId());
+        requireTableManagementScope(user, request.branchId());
         if (!table.getBranch().getId().equals(request.branchId())) {
             throw badRequest("A table cannot be moved to another branch");
         }
@@ -303,8 +324,9 @@ public class ManagementService {
     }
 
     @Transactional
-    public AdminTableResponse deactivateTable(UUID id) {
+    public AdminTableResponse deactivateTable(AuthUser user, UUID id) {
         StoreTable table = tables.findById(id).orElseThrow(() -> notFound("Table"));
+        requireTableManagementScope(user, table.getBranch().getId());
         if (sessions.existsByTableIdAndStatus(id, PlaySession.PlaySessionStatus.active)) {
             throw conflict("An active play session is using this table");
         }
@@ -399,10 +421,34 @@ public class ManagementService {
     private ProfileResponse profile(User user) { return new ProfileResponse(user.getId(), user.getFirstName(), user.getLastName(), user.getDisplayName(), user.getEmail(), user.getPhone()); }
     private OrderSummaryResponse order(Order order) { return new OrderSummaryResponse(order.getOrderNumber(), order.getContactFirstName() + " " + order.getContactLastName(), order.getStatus(), order.getFulfillmentMethod().getName(), order.getPickupBranch() == null ? null : order.getPickupBranch().getName(), order.getTotalAmount(), order.getCurrency(), (int) orderItems.countByOrderId(order.getId()), order.getPlacedAt()); }
     private UserSummaryResponse user(User user) { return new UserSummaryResponse(user.getId(), displayName(user), user.getEmail(), user.getPhone(), user.getStatus().name(), userRoles.findActiveRoleCodesByUserId(user.getId()), orders.countByUserId(user.getId()), reservations.countByUserId(user.getId()), sessions.countByUserIdAndStatus(user.getId(), PlaySession.PlaySessionStatus.completed), user.getLastLoginAt() == null ? user.getCreatedAt() : user.getLastLoginAt()); }
-    private StaffResponse staff(User user) { List<StaffBranchAssignment> list = assignments.findByUserIdOrderByIsPrimaryDescAssignedAtAsc(user.getId()); return new StaffResponse(user.getId(), displayName(user), user.getEmail(), user.getPhone(), user.getStatus().name(), list.stream().map(item -> item.getBranch().getId()).toList(), list.stream().map(item -> item.getBranch().getName()).toList(), user.getLastLoginAt()); }
+    private StaffResponse staff(User user) {
+        List<StaffBranchAssignment> list = assignments.findByUserIdOrderByIsPrimaryDescAssignedAtAsc(user.getId());
+        List<String> activeRoles = userRoles.findActiveRoleCodesByUserId(user.getId());
+        return new StaffResponse(user.getId(), displayName(user), user.getEmail(), user.getPhone(), user.getStatus().name(),
+                list.stream().map(item -> item.getBranch().getId()).toList(),
+                list.stream().map(item -> item.getBranch().getName()).toList(),
+                user.getLastLoginAt(),
+                activeRoles);
+    }
     private BranchResponse branch(Branch branch) { OffsetDateTime now = OffsetDateTime.now(); OffsetDateTime dayStart = now.withOffsetSameInstant(ZoneOffset.UTC).toLocalDate().atStartOfDay().atOffset(ZoneOffset.UTC); long staffCount = assignments.findAllByOrderByAssignedAtDesc().stream().filter(item -> item.getBranch().getId().equals(branch.getId())).map(item -> item.getUser().getId()).distinct().count(); return new BranchResponse(branch.getId(), branch.getCode(), branch.getName(), branch.getAddressLine1(), branch.getDistrict(), branch.getProvince(), branch.getPostalCode(), branch.getPhone(), branch.getStatus().name(), branch.isAllowReservations(), tables.countByBranchIdAndIsActiveTrue(branch.getId()), staffCount, reservations.countByBranchIdAndStartsAtBetween(branch.getId(), dayStart, dayStart.plusDays(1))); }
     private ProductManagementResponse product(Product product) { long stock = inventory.availableStockByProductId(product.getId()); return new ProductManagementResponse(product.getId(), product.getSku(), product.getName(), product.getCategory().getId(), product.getCategory().getName(), product.getBasePrice(), product.getSalePrice(), product.getMinPlayers(), product.getMaxPlayers(), product.getMinPlayTimeMinutes(), product.getMaxPlayTimeMinutes(), product.getMinAge(), product.getDifficulty().name(), product.getDescription(), product.isActive(), stock); }
     private InventoryResponse inventory(BranchProductInventory item) { return new InventoryResponse(item.getBranch().getId(), item.getBranch().getName(), item.getProduct().getId(), item.getProduct().getName(), item.getProduct().getSku(), item.getQuantityOnHand(), item.getReservedQuantity(), item.getQuantityOnHand() - item.getReservedQuantity(), item.getLowStockThreshold()); }
+
+    private void requireTableManagementRole(AuthUser principal) {
+        if (principal == null || (!principal.roles().contains("admin") && !principal.roles().contains("manager"))) {
+            throw new BoardlyException("Table management requires Manager or Admin privileges",
+                    HttpStatus.FORBIDDEN.value(), "TABLE_MANAGEMENT_REQUIRED");
+        }
+    }
+
+    private void requireTableManagementScope(AuthUser principal, UUID branchId) {
+        requireTableManagementRole(principal);
+        if (principal.roles().contains("admin")) return;
+        if (!assignments.existsByUserIdAndBranchId(principal.id(), branchId)) {
+            throw new BoardlyException("You are not assigned to manage tables for this branch",
+                    HttpStatus.FORBIDDEN.value(), "BRANCH_ACCESS_DENIED");
+        }
+    }
 
     private void applyBranch(Branch branch, BranchRequest request) { branch.setCode(request.code().trim().toUpperCase(Locale.ROOT)); branch.setName(request.name().trim()); branch.setAddressLine1(request.address().trim()); branch.setDistrict(request.district().trim()); branch.setProvince(blankToNull(request.province())); branch.setPostalCode(blankToNull(request.postalCode())); branch.setPhone(blankToNull(request.phone())); branch.setStatus(enumValue(Branch.BranchStatus.class, request.status(), "Branch status")); branch.setAllowReservations(request.allowReservations()); }
     private void applyProduct(Product product, ProductManagementRequest request) { if (request.maxPlayers() < request.minPlayers()) throw badRequest("Maximum players must be at least minimum players"); if (request.salePrice() != null && request.salePrice().compareTo(request.basePrice()) > 0) throw badRequest("Sale price cannot exceed base price"); product.setSku(request.sku().trim().toUpperCase(Locale.ROOT)); product.setName(request.name().trim()); product.setCategory(categories.findById(request.categoryId()).orElseThrow(() -> notFound("Product category"))); product.setBasePrice(request.basePrice()); product.setSalePrice(request.salePrice()); product.setMinPlayers(request.minPlayers()); product.setMaxPlayers(request.maxPlayers()); product.setMinPlayTimeMinutes(request.minPlayTimeMinutes()); product.setMaxPlayTimeMinutes(request.maxPlayTimeMinutes()); product.setMinAge(request.minAge()); product.setDifficulty(enumValue(Product.ProductDifficulty.class, request.difficulty(), "Product difficulty")); product.setDescription(blankToNull(request.description())); product.setActive(request.active()); product.setUpdatedAt(OffsetDateTime.now()); }

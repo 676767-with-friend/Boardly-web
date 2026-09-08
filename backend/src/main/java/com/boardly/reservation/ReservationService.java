@@ -483,7 +483,7 @@ public class ReservationService {
     }
 
     private void requireStaffOperator(AuthUser user) {
-        if (!user.roles().contains("staff")) {
+        if (!user.roles().contains("staff") && !user.roles().contains("manager") && !user.roles().contains("admin")) {
             throw new BoardlyException("Staff access is required for customer session operations.", 403,
                     "STAFF_OPERATION_REQUIRED");
         }

@@ -4,9 +4,10 @@ import { StaffLiveTablesPage } from "@/features/StaffOperationalPages"
 import type { LiveTable } from "@/services/reservationsApi"
 import {
   adminApi,
+  staffApi,
   type AdminTable,
   type AdminTableInput,
-  type BranchManagement,
+  type StaffBranch,
   type TableFeature,
   type TableZone,
 } from "@/services/managementApi"
@@ -14,7 +15,7 @@ import {
 const input = "w-full rounded-xl border border-[#D2D2D7] bg-white px-3 py-2.5 text-sm outline-none focus:border-[#0071E3]"
 const errorText = (error: unknown) => typeof error === "object" && error && "message" in error ? String(error.message) : "Unable to complete that request."
 
-export function AdminLiveTablesPage() {
+export function AdminLiveTablesPage({ mode = "admin" }: { mode?: "admin" | "manager" } = {}) {
   const [version, setVersion] = useState(0)
   const [branchId, setBranchId] = useState("")
   const [tables, setTables] = useState<AdminTable[]>([])
@@ -46,14 +47,14 @@ export function AdminLiveTablesPage() {
 
   return <>
     {error && <div className="m-4 mb-0 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 sm:mx-6">{error}</div>}
-    <StaffLiveTablesPage mode="admin" refreshKey={version} onManageTable={(table, id) => void openEditor(table, id)} />
+    <StaffLiveTablesPage mode={mode} refreshKey={version} onManageTable={(table, id) => void openEditor(table, id)} />
     {loading && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 text-sm font-medium text-white backdrop-blur-sm">Loading table configuration...</div>}
     {editing !== undefined && <TableEditor item={editing} branchId={branchId} zones={zones} features={features} nextOrder={tables.length ? Math.max(...tables.map(table => table.sortOrder)) + 1 : 1} onClose={() => setEditing(undefined)} onSaved={async () => { setEditing(undefined); setVersion(value => value + 1) }} onDeactivate={editing ? () => deactivate(editing) : undefined} onError={setError} />}
   </>
 }
 
-export function AdminTableManagementPage() {
-  const [branches, setBranches] = useState<BranchManagement[]>([])
+export function AdminTableManagementPage({ mode = "admin" }: { mode?: "admin" | "manager" } = {}) {
+  const [branches, setBranches] = useState<StaffBranch[]>([])
   const [branchId, setBranchId] = useState("")
   const [zones, setZones] = useState<TableZone[]>([])
   const [features, setFeatures] = useState<TableFeature[]>([])
@@ -73,7 +74,7 @@ export function AdminTableManagementPage() {
   }
 
   useEffect(() => {
-    Promise.all([adminApi.branches(), adminApi.tableFeatures()]).then(([branchList, featureList]) => {
+    Promise.all([staffApi.branches(), adminApi.tableFeatures()]).then(([branchList, featureList]) => {
       setBranches(branchList); setFeatures(featureList)
       const first = branchList[0]?.id ?? ""; setBranchId(first); if (first) void loadBranch(first)
     }).catch(next => { setError(errorText(next)); setLoading(false) })

@@ -823,6 +823,7 @@ INSERT INTO roles (code, name)
 VALUES
     ('customer', 'Customer'),
     ('staff', 'Staff'),
+    ('manager', 'Manager'),
     ('admin', 'Admin')
 ON CONFLICT (code) DO NOTHING;
 

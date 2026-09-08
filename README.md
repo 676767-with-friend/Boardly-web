@@ -1,6 +1,6 @@
 # Boardly
 
-**Current Version: v1.0.0**
+**Current Version: v1.1.0**
 
 Boardly is a full-stack board game store and cafe application for shopping, reservations, store operations, and administration.
 
@@ -28,6 +28,7 @@ Development/demo use only. PostgreSQL stores these passwords as BCrypt hashes.
 | --- | --- | --- |
 | Customer | `customer@boardly.com` | `customer` |
 | Staff | `staff@boardly.com` | `staff` |
+| Manager | `manager@boardly.com` | `manager` |
 | Admin | `admin@boardly.com` | `admin` |
 
 ## Reset the Docker Database
@@ -80,19 +81,19 @@ Frontend: `http://localhost:8443`
 ## Current Implementation
 
 - **Customer:** shop, account, cart, pickup checkout, orders, and reservations.
-- **Staff:** assigned-branch customer, table, reservation, checkout, and inventory operations.
-- **Admin:** current global products, inventory, users, staff, branches, tables, and store administration.
+- **Staff:** customer/table operations (walk-in sessions, reservation check-in, session checkout preview and payment confirmation, orders, products, and customer lookup) on assigned branches without adding or removing physical tables.
+- **Manager:** all Staff operational capabilities plus assigned-branch physical-table management (add, edit, and deactivate physical tables, zone alignment, and capacity settings).
+- **Admin:** full system permissions including all Staff and Manager capabilities, branch management, staff account creation and role assignment (Staff vs Manager), product catalog, global inventory, and back-office administration.
 
 ## Planned Improvements / Future Work
 
-The proposed role model is future work and is **not implemented in v1.0.0**:
+Future roadmap items following the `v1.1.0` role model implementation:
 
-- **Staff:** customer/table operations without adding or removing physical tables.
-- **Manager:** future role with all Staff capabilities plus assigned-branch physical-table management.
-- **Admin:** future full system permissions including Staff and Manager capabilities.
-
-Manager does not currently exist.
+- Multi-branch manager assignments with per-branch granular permission overrides.
+- Advanced reporting and analytics dashboards (revenue per table, peak hour utilization, popular board games).
+- Automated table turn notifications and customer SMS/email reservation reminders.
+- Split-bill payments and partial payment settlements during session checkout.
 
 ## Versioning
 
-Boardly currently uses `v1.0.0`. Future releases should update the version using Semantic Versioning (`MAJOR.MINOR.PATCH`).
+Boardly uses Semantic Versioning (`MAJOR.MINOR.PATCH`). Current release is `v1.1.0`.

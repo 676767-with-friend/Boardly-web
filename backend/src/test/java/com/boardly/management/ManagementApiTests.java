@@ -92,6 +92,13 @@ class ManagementApiTests {
         org.junit.jupiter.api.Assertions.assertFalse(staff.getPasswordHash().contains("ManagedStaffPassword!"));
         org.junit.jupiter.api.Assertions.assertTrue(userRoles.findActiveRoleCodesByUserId(staff.getId()).contains("staff"));
         org.junit.jupiter.api.Assertions.assertTrue(assignments.existsByUserIdAndBranchId(staff.getId(), CENTRAL));
+
+        String managerBody = "{\"firstName\":\"Managed\",\"lastName\":\"Manager\",\"displayName\":\"Managed Manager\",\"email\":\"management-managed-manager@example.test\",\"phone\":\"0810000001\",\"password\":\"ManagedManagerPassword!\",\"branchIds\":[\"" + CENTRAL + "\"],\"primaryBranchId\":\"" + CENTRAL + "\",\"role\":\"manager\"}";
+        mockMvc.perform(post("/api/admin/staff").header("Authorization", bearer(adminToken)).contentType(MediaType.APPLICATION_JSON).content(managerBody))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.branchNames[0]").value("Central Branch"));
+        User mgr = users.findByEmailIgnoreCase("management-managed-manager@example.test").orElseThrow();
+        org.junit.jupiter.api.Assertions.assertTrue(userRoles.findActiveRoleCodesByUserId(mgr.getId()).contains("manager"));
+        org.junit.jupiter.api.Assertions.assertTrue(assignments.existsByUserIdAndBranchId(mgr.getId(), CENTRAL));
     }
 
     @Test
@@ -149,6 +156,39 @@ class ManagementApiTests {
         mockMvc.perform(post("/api/admin/inventory").header("Authorization", bearer(adminToken))
                         .contentType(MediaType.APPLICATION_JSON).content(addInventory))
                 .andExpect(status().isConflict());
+
+        JsonNode manager = register("management-ops-manager@example.test");
+        grant(manager.path("user").path("id").asText(), "manager", CENTRAL);
+        String managerToken = login("management-ops-manager@example.test");
+
+        mockMvc.perform(get("/api/admin/tables").header("Authorization", bearer(managerToken))
+                        .param("branchId", CENTRAL.toString())).andExpect(status().isOk());
+        mockMvc.perform(get("/api/admin/tables").header("Authorization", bearer(managerToken))
+                        .param("branchId", SILOM.toString()))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("BRANCH_ACCESS_DENIED"));
+        mockMvc.perform(get("/api/admin/dashboard").header("Authorization", bearer(managerToken)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/admin/staff").header("Authorization", bearer(managerToken)))
+                .andExpect(status().isForbidden());
+
+        String mgrTableCode = "M" + UUID.randomUUID().toString().substring(0, 6);
+        String mgrTableBody = "{\"branchId\":\"%s\",\"code\":\"%s\",\"zoneId\":\"%s\",\"minPlayers\":2,\"maxPlayers\":4,\"operationalStatus\":\"available\",\"sortOrder\":91,\"active\":true,\"featureIds\":[]}".formatted(CENTRAL, mgrTableCode, zoneId);
+        String mgrTableJson = mockMvc.perform(post("/api/admin/tables").header("Authorization", bearer(managerToken))
+                        .contentType(MediaType.APPLICATION_JSON).content(mgrTableBody))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.code").value(mgrTableCode.toUpperCase()))
+                .andReturn().getResponse().getContentAsString();
+        String mgrTableId = objectMapper.readTree(mgrTableJson).path("id").asText();
+        mockMvc.perform(put("/api/admin/tables/{id}", mgrTableId).header("Authorization", bearer(managerToken))
+                        .contentType(MediaType.APPLICATION_JSON).content(mgrTableBody.replace("\"maxPlayers\":4", "\"maxPlayers\":6")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.maxPlayers").value(6));
+        mockMvc.perform(delete("/api/admin/tables/{id}", mgrTableId).header("Authorization", bearer(managerToken)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.active").value(false));
+
+        UUID silomZoneId = zones.findByBranchIdOrderBySortOrderAscNameAsc(SILOM).getFirst().getId();
+        String unassignedTableBody = "{\"branchId\":\"%s\",\"code\":\"%s\",\"zoneId\":\"%s\",\"minPlayers\":2,\"maxPlayers\":4,\"operationalStatus\":\"available\",\"sortOrder\":92,\"active\":true,\"featureIds\":[]}".formatted(SILOM, "SILOM_MGR", silomZoneId);
+        mockMvc.perform(post("/api/admin/tables").header("Authorization", bearer(managerToken))
+                        .contentType(MediaType.APPLICATION_JSON).content(unassignedTableBody))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("BRANCH_ACCESS_DENIED"));
     }
 
     private JsonNode register(String email) throws Exception {

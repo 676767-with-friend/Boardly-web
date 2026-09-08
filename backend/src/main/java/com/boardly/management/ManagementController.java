@@ -40,10 +40,10 @@ public class ManagementController {
     @GetMapping("/admin/inventory") public List<InventoryResponse> inventory(@RequestParam UUID branchId) { return service.inventory(branchId); }
     @PatchMapping("/admin/inventory/{productId}") public InventoryResponse adjustInventory(@AuthenticationPrincipal AuthUser admin, @PathVariable UUID productId, @Valid @RequestBody InventoryAdjustmentRequest request) { return service.adjustInventory(admin, productId, request); }
     @PostMapping("/admin/inventory") public InventoryResponse addInventory(@AuthenticationPrincipal AuthUser admin, @Valid @RequestBody AddInventoryRequest request) { return service.addInventory(admin, request); }
-    @GetMapping("/admin/table-zones") public List<TableZoneResponse> tableZones(@RequestParam UUID branchId) { return service.tableZones(branchId); }
-    @GetMapping("/admin/table-features") public List<TableFeatureResponse> tableFeatures() { return service.tableFeatures(); }
-    @GetMapping("/admin/tables") public List<AdminTableResponse> tables(@RequestParam UUID branchId) { return service.tables(branchId); }
-    @PostMapping("/admin/tables") public AdminTableResponse createTable(@Valid @RequestBody AdminTableRequest request) { return service.createTable(request); }
-    @PutMapping("/admin/tables/{id}") public AdminTableResponse updateTable(@PathVariable UUID id, @Valid @RequestBody AdminTableRequest request) { return service.updateTable(id, request); }
-    @DeleteMapping("/admin/tables/{id}") public AdminTableResponse deactivateTable(@PathVariable UUID id) { return service.deactivateTable(id); }
+    @GetMapping("/admin/table-zones") public List<TableZoneResponse> tableZones(@AuthenticationPrincipal AuthUser user, @RequestParam UUID branchId) { return service.tableZones(user, branchId); }
+    @GetMapping("/admin/table-features") public List<TableFeatureResponse> tableFeatures(@AuthenticationPrincipal AuthUser user) { return service.tableFeatures(user); }
+    @GetMapping("/admin/tables") public List<AdminTableResponse> tables(@AuthenticationPrincipal AuthUser user, @RequestParam UUID branchId) { return service.tables(user, branchId); }
+    @PostMapping("/admin/tables") public AdminTableResponse createTable(@AuthenticationPrincipal AuthUser user, @Valid @RequestBody AdminTableRequest request) { return service.createTable(user, request); }
+    @PutMapping("/admin/tables/{id}") public AdminTableResponse updateTable(@AuthenticationPrincipal AuthUser user, @PathVariable UUID id, @Valid @RequestBody AdminTableRequest request) { return service.updateTable(user, id, request); }
+    @DeleteMapping("/admin/tables/{id}") public AdminTableResponse deactivateTable(@AuthenticationPrincipal AuthUser user, @PathVariable UUID id) { return service.deactivateTable(user, id); }
 }

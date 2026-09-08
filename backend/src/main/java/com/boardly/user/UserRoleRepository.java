@@ -20,4 +20,8 @@ public interface UserRoleRepository extends JpaRepository<UserRole, UserRoleId> 
             where ur.user_id = :userId
             """, nativeQuery = true)
     List<String> findPermissionCodesByUserId(UUID userId);
+
+    List<UserRole> findByUserId(UUID userId);
+
+    void deleteAllByUserId(UUID userId);
 }

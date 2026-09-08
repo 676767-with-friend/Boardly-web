@@ -7,6 +7,7 @@ function AuthLoading() {
 
 export function roleHome(roles: string[]) {
   if (roles.includes('admin')) return '/admin'
+  if (roles.includes('manager')) return '/manager'
   if (roles.includes('staff')) return '/staff'
   return '/account'
 }
@@ -28,7 +29,7 @@ export function CustomerAccountRoute() {
   const { status, user } = useAuth()
   if (status === 'loading') return <AuthLoading />
   if (!user) return <Navigate to="/login" replace state={{ from: '/account' }} />
-  return user.roles.includes('admin') || user.roles.includes('staff')
+  return user.roles.includes('admin') || user.roles.includes('manager') || user.roles.includes('staff')
     ? <Navigate to={roleHome(user.roles)} replace />
     : <Outlet />
 }

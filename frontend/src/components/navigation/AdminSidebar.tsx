@@ -10,6 +10,7 @@ const management: BackOfficeLink[] = [
   { icon: 'users', label: 'Users', path: '/admin/users' },
   { icon: 'staff', label: 'Staff', path: '/admin/staff' },
   { icon: 'branches', label: 'Branches', path: '/admin/branches' },
+  { icon: 'tables', label: 'Physical Tables', path: '/admin/physical-tables' },
 ]
 
 export default function AdminSidebar({ onLogout }: { onLogout: () => void }) {

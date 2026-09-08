@@ -46,8 +46,9 @@ public class SecurityConfig {
                 .requestMatchers("/api/health", "/api/auth/**", "/error").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/product-categories", "/api/products/**", "/api/branches/**").permitAll()
                 .requestMatchers("/api/cart/**").permitAll()
+                .requestMatchers("/api/admin/tables/**", "/api/admin/table-zones/**", "/api/admin/table-features/**").hasAnyRole("ADMIN", "MANAGER")
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                .requestMatchers("/api/staff/**").hasAnyRole("STAFF", "ADMIN")
+                .requestMatchers("/api/staff/**").hasAnyRole("STAFF", "MANAGER", "ADMIN")
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

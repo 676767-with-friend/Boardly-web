@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, useNavigate, Navigate } from 'react-router-dom'
 
-import { CustomerLayout, StaffLayout, AdminLayout, AuthLayout } from '@/layouts'
+import { CustomerLayout, StaffLayout, ManagerLayout, AdminLayout, AuthLayout } from '@/layouts'
 import { CustomerAccountRoute, RequireAuth, RequireRole } from '@/auth/RouteGuards'
 import * as Staff from '@/features/StaffPages'
 import * as Admin from '@/features/AdminPages'
@@ -10,7 +10,7 @@ import { CartPage, CheckoutPage, MyOrdersPage, OrderConfirmationPage } from '@/f
 import { MyReservationsApiPage, ReservationConfirmationPage, ReservationPage } from '@/features/ReservationPages'
 import { StaffCheckInPage, StaffLiveTablesPage } from '@/features/StaffOperationalPages'
 import { AccountApiPage } from '@/features/AccountApiPage'
-import { AdminLiveTablesPage } from '@/features/AdminTableManagementPage'
+import { AdminLiveTablesPage, AdminTableManagementPage } from '@/features/AdminTableManagementPage'
 
 // Legacy mapper to preserve the page props
 export function legacyNavigate(reactRouterNavigate: ReturnType<typeof useNavigate>) {
@@ -98,7 +98,7 @@ function RouterContent() {
       </Route>
 
       {/* STAFF */}
-      <Route element={<RequireRole roles={['staff', 'admin']} />}>
+      <Route element={<RequireRole roles={['staff', 'manager', 'admin']} />}>
         <Route element={<StaffLayout />}>
           <Route path="/staff" element={<Staff.StaffDashboardPage />} />
           <Route path="/staff/tables" element={<StaffLiveTablesPage />} />
@@ -110,11 +110,26 @@ function RouterContent() {
         </Route>
       </Route>
 
+      {/* MANAGER */}
+      <Route element={<RequireRole roles={['manager', 'admin']} />}>
+        <Route element={<ManagerLayout />}>
+          <Route path="/manager" element={<Staff.StaffDashboardPage />} />
+          <Route path="/manager/tables" element={<AdminLiveTablesPage mode="manager" />} />
+          <Route path="/manager/physical-tables" element={<AdminTableManagementPage mode="manager" />} />
+          <Route path="/manager/check-in" element={<StaffCheckInPage />} />
+          <Route path="/manager/checkin" element={<Navigate to="/manager/check-in" replace />} />
+          <Route path="/manager/orders" element={<Staff.StaffOrdersPage />} />
+          <Route path="/manager/products" element={<Staff.StaffProductsPage />} />
+          <Route path="/manager/users" element={<Staff.StaffUsersPage />} />
+        </Route>
+      </Route>
+
       {/* ADMIN */}
       <Route element={<RequireRole roles={['admin']} />}>
         <Route element={<AdminLayout />}>
           <Route path="/admin" element={<Admin.AdminDashboardPage />} />
           <Route path="/admin/tables" element={<AdminLiveTablesPage />} />
+          <Route path="/admin/physical-tables" element={<AdminTableManagementPage mode="admin" />} />
           <Route path="/admin/orders" element={<Admin.AdminOrdersPage />} />
           <Route path="/admin/products" element={<Admin.AdminProductsPage />} />
           <Route path="/admin/users" element={<Admin.UserManagementPage />} />

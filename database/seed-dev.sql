@@ -79,6 +79,7 @@ WHERE LOWER(email) LIKE 'phase6.%'
 INSERT INTO users (id, first_name, last_name, display_name, email, password_hash, status, deleted_at) VALUES
   ('e0000000-0000-0000-0000-000000000001', 'Development', 'Customer', 'Development Customer', 'customer@boardly.com', '$2a$10$FkNSS08/.OBZf45LjfzmNOKqueFUUtWIXyYprPEM7Uoag1bO5clxK', 'active', NULL),
   ('e0000000-0000-0000-0000-000000000002', 'Development', 'Staff', 'Development Staff', 'staff@boardly.com', '$2a$10$1Z7ukHjM1RnWD6y08BpnDe4.WeBY8PTJypgaGpS5RouDpEYSs45qu', 'active', NULL),
+  ('e0000000-0000-0000-0000-000000000004', 'Development', 'Manager', 'Development Manager', 'manager@boardly.com', '$2a$10$I3e5EDpvxTBGXRQINtvdiuwTayPuT06aIDKLBaDHcUMB0aQ872xm.', 'active', NULL),
   ('e0000000-0000-0000-0000-000000000003', 'Development', 'Admin', 'Development Admin', 'admin@boardly.com', '$2a$10$VvcQR0RI33LlrJXs6fGbXOHGR.G9Dz94L.ywhU40qeSVu92B7hHsq', 'active', NULL)
 ON CONFLICT (LOWER(email)) DO UPDATE
 SET first_name = EXCLUDED.first_name,
@@ -91,7 +92,7 @@ SET first_name = EXCLUDED.first_name,
 
 DELETE FROM user_roles
 WHERE user_id IN (
-  SELECT id FROM users WHERE LOWER(email) IN ('customer@boardly.com', 'staff@boardly.com', 'admin@boardly.com')
+  SELECT id FROM users WHERE LOWER(email) IN ('customer@boardly.com', 'staff@boardly.com', 'manager@boardly.com', 'admin@boardly.com')
 );
 
 INSERT INTO user_roles (user_id, role_id)
@@ -99,6 +100,7 @@ SELECT users.id, roles.id
 FROM (VALUES
   ('customer@boardly.com', 'customer'),
   ('staff@boardly.com', 'staff'),
+  ('manager@boardly.com', 'manager'),
   ('admin@boardly.com', 'admin')
 ) AS demo(email, role_code)
 JOIN users ON LOWER(users.email) = demo.email
@@ -106,14 +108,14 @@ JOIN roles ON roles.code = demo.role_code;
 
 DELETE FROM staff_branch_assignments
 WHERE user_id IN (
-  SELECT id FROM users WHERE LOWER(email) IN ('customer@boardly.com', 'staff@boardly.com', 'admin@boardly.com')
+  SELECT id FROM users WHERE LOWER(email) IN ('customer@boardly.com', 'staff@boardly.com', 'manager@boardly.com', 'admin@boardly.com')
 );
 
 INSERT INTO staff_branch_assignments (user_id, branch_id, is_primary)
 SELECT users.id, branches.id, TRUE
 FROM users
 JOIN branches ON branches.code = 'BG-CTR'
-WHERE LOWER(users.email) = 'staff@boardly.com';
+WHERE LOWER(users.email) IN ('staff@boardly.com', 'manager@boardly.com');
 
 -- Development convention: day_of_week 0-6 is Monday-Sunday.
 INSERT INTO branch_operating_hours (id, branch_id, day_of_week, open_time, close_time, is_closed) VALUES

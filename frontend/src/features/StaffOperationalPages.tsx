@@ -28,7 +28,7 @@ const duration = (seconds: number) => {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(remaining).padStart(2, "0")}`
 }
 
-export function StaffLiveTablesPage({ mode = "staff", refreshKey = 0, onManageTable }: { mode?: "staff" | "admin"; refreshKey?: number; onManageTable?: (table: LiveTable | null, branchId: string) => void }) {
+export function StaffLiveTablesPage({ mode = "staff", refreshKey = 0, onManageTable }: { mode?: "staff" | "manager" | "admin"; refreshKey?: number; onManageTable?: (table: LiveTable | null, branchId: string) => void }) {
   const [branches, setBranches] = useState<StaffBranch[]>([])
   const [branchId, setBranchId] = useState("")
   const [walkInPlayers, setWalkInPlayers] = useState(4)
@@ -82,9 +82,10 @@ export function StaffLiveTablesPage({ mode = "staff", refreshKey = 0, onManageTa
     <div className="min-w-0 flex-1">
       <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div><h1 className="text-2xl font-bold text-[#1D1D1F]">Live Tables</h1><p className="mt-1 text-sm text-[#6E6E73]">{mode === "staff" ? "Database-derived table, reservation, and session state." : "Live floor state with physical table management."}</p></div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap items-end gap-3">
           <label className="text-xs font-medium text-[#6E6E73]">Assigned branch<select value={branchId} onChange={event => { setBranchId(event.target.value); void load(event.target.value) }} className="mt-1 block h-11 min-w-48 rounded-xl border border-[#D2D2D7] bg-white px-3 text-sm text-[#1D1D1F]">{branches.map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>
-          {mode === "staff" ? <label className="text-xs font-medium text-[#6E6E73]">Party size<select value={walkInPlayers} onChange={event => { const players = Number(event.target.value); setWalkInPlayers(players); void load(branchId, players) }} className="mt-1 block h-11 w-24 rounded-xl border border-[#D2D2D7] bg-white px-3 text-sm font-semibold">{Array.from({ length: 12 }, (_, index) => index + 1).map(players => <option key={players}>{players}</option>)}</select></label> : <Btn variant="primary" onClick={() => onManageTable?.(null, branchId)} className="mt-5 whitespace-nowrap px-4">+ Add Table</Btn>}
+          <label className="text-xs font-medium text-[#6E6E73]">Party size<select value={walkInPlayers} onChange={event => { const players = Number(event.target.value); setWalkInPlayers(players); void load(branchId, players) }} className="mt-1 block h-11 w-24 rounded-xl border border-[#D2D2D7] bg-white px-3 text-sm font-semibold">{Array.from({ length: 12 }, (_, index) => index + 1).map(players => <option key={players}>{players}</option>)}</select></label>
+          {onManageTable && <Btn variant="primary" onClick={() => onManageTable(null, branchId)} className="h-11 whitespace-nowrap px-4">+ Add Table</Btn>}
         </div>
       </div>
       <div className="mb-5 flex flex-wrap gap-5 text-xs font-medium">{(Object.keys(statusStyle) as LiveTable["status"][]).map(status => <span key={status} className="flex items-center gap-1.5 capitalize text-[#6E6E73]"><span className={`h-2.5 w-2.5 rounded-full ${statusStyle[status].dot}`} />{status}</span>)}</div>
@@ -105,18 +106,23 @@ export function StaffLiveTablesPage({ mode = "staff", refreshKey = 0, onManageTa
     </div>
     {selected && <aside className="hidden w-72 flex-shrink-0 lg:block"><TableDetails table={selected} elapsed={elapsed(selected)} mode={mode} onClose={() => setSelected(null)} onWalkIn={() => setWalkIn(selected)} onCheckout={() => setCheckout(selected)} onManage={() => onManageTable?.(selected, branchId)} /></aside>}
     {selected && <div className="fixed inset-x-4 bottom-4 z-30 rounded-2xl border border-[#D2D2D7] bg-white p-4 shadow-xl lg:hidden"><TableDetails table={selected} elapsed={elapsed(selected)} mode={mode} onClose={() => setSelected(null)} onWalkIn={() => setWalkIn(selected)} onCheckout={() => setCheckout(selected)} onManage={() => onManageTable?.(selected, branchId)} compact /></div>}
-    {mode === "staff" && walkIn && <WalkInModal table={walkIn} branchId={branchId} defaultPlayers={walkInPlayers} onClose={() => setWalkIn(null)} onComplete={async () => { setWalkIn(null); await load(branchId) }} onError={setError} />}
-    {mode === "staff" && checkout?.sessionId && <CheckoutModal sessionId={checkout.sessionId} onClose={() => setCheckout(null)} onComplete={async () => { setCheckout(null); setSelected(null); await load(branchId) }} onError={setError} />}
+    {walkIn && <WalkInModal table={walkIn} branchId={branchId} defaultPlayers={walkInPlayers} onClose={() => setWalkIn(null)} onComplete={async () => { setWalkIn(null); await load(branchId) }} onError={setError} />}
+    {checkout?.sessionId && <CheckoutModal sessionId={checkout.sessionId} onClose={() => setCheckout(null)} onComplete={async () => { setCheckout(null); setSelected(null); await load(branchId) }} onError={setError} />}
   </div>
 }
 
-function TableDetails({ table, elapsed, mode, onClose, onWalkIn, onCheckout, onManage, compact = false }: { table: LiveTable; elapsed: number; mode: "staff" | "admin"; onClose: () => void; onWalkIn: () => void; onCheckout: () => void; onManage: () => void; compact?: boolean }) {
-  return <div className={compact ? "" : "sticky top-6 rounded-2xl border border-[#D2D7] bg-white p-5"}>
+function TableDetails({ table, elapsed, mode, onClose, onWalkIn, onCheckout, onManage, compact = false }: { table: LiveTable; elapsed: number; mode: "staff" | "manager" | "admin"; onClose: () => void; onWalkIn: () => void; onCheckout: () => void; onManage?: () => void; compact?: boolean }) {
+  return <div className={compact ? "" : "sticky top-6 rounded-2xl border border-[#D2D2D7] bg-white p-5"}>
     <div className="mb-4 flex items-center justify-between"><h2 className="font-bold">Table {table.code}</h2><button type="button" onClick={onClose} aria-label="Close">x</button></div>
     <div className="mb-4 flex items-center gap-2"><span className={`h-2.5 w-2.5 rounded-full ${statusStyle[table.status].dot}`} /><span className="text-sm font-medium capitalize">{table.status}</span></div>
     {!compact && <div className="mb-5 space-y-1"><Row label="Zone" value={table.zone} /><Row label="Capacity" value={`${table.minPlayers}-${table.maxPlayers}`} />{table.client && <Row label="Client" value={table.client} />}{table.reservationNumber && <Row label="Reservation" value={table.reservationNumber} />}{table.reservationStartsAt && <Row label="Booked" value={`${time(table.reservationStartsAt)}-${time(table.reservationEndsAt!)}`} />}{table.checkInAt && <Row label="Check-in" value={dateTime(table.checkInAt)} />}{table.status === "occupied" && <Row label="Elapsed" value={duration(elapsed)} />}{table.bookedDurationMinutes && <Row label="Booked duration" value={`${table.bookedDurationMinutes} min`} />}{table.overtimeSeconds > 0 && <Row label="Overtime" value={duration(table.overtimeSeconds + Math.max(0, elapsed - table.elapsedSeconds))} />}{table.runningFee !== null && <Row label="Current fee" value={money(table.runningFee)} />}</div>}
-    {mode === "admin" ? <Btn variant="primary" onClick={onManage} className="w-full py-2.5 text-sm">Manage Physical Table</Btn> : <>{table.status === "occupied" && table.sessionId && <Btn variant="danger" onClick={onCheckout} className="w-full py-2.5 text-sm">End Session & Check Out</Btn>}{table.status === "reserved" && <p className="rounded-xl bg-orange-50 p-3 text-xs text-orange-800">Use Check-In to start this reservation at its booked time.</p>}{table.status === "available" && table.assignable && <Btn variant="primary" onClick={onWalkIn} className="w-full py-2.5 text-sm">Assign Walk-In</Btn>}</>}
-    {!table.assignable && table.status !== "occupied" && table.status !== "reserved" && <p className="rounded-xl bg-amber-50 p-3 text-xs text-amber-900">{table.assignmentBlockReason}</p>}
+    <div className="space-y-2">
+      {table.status === "occupied" && table.sessionId && <Btn variant="danger" onClick={onCheckout} className="w-full py-2.5 text-sm">End Session & Check Out</Btn>}
+      {table.status === "reserved" && <p className="rounded-xl bg-orange-50 p-3 text-xs text-orange-800">Use Check-In to start this reservation at its booked time.</p>}
+      {table.status === "available" && table.assignable && <Btn variant="primary" onClick={onWalkIn} className="w-full py-2.5 text-sm">Assign Walk-In</Btn>}
+      {onManage && (mode === "admin" || mode === "manager") && <Btn variant="secondary" onClick={onManage} className="w-full py-2.5 text-sm">Manage Physical Table</Btn>}
+    </div>
+    {!table.assignable && table.status !== "occupied" && table.status !== "reserved" && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-900">{table.assignmentBlockReason}</p>}
   </div>
 }
 

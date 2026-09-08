@@ -120,33 +120,41 @@ class ReservationApiTests {
         JsonNode reservation = createReservation(customerToken, CENTRAL_A1, startsAt, startsAt.plusHours(1));
         makeCheckInEligible(reservation.get("id").asText(), 60);
         String staffToken = createStaffToken(CENTRAL);
+        String managerToken = createManagerToken(CENTRAL);
         String adminToken = createAdminToken();
 
         mockMvc.perform(get("/api/staff/branches/{branchId}/live-tables", SILOM).header("Authorization", bearer(staffToken)))
                 .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("BRANCH_ACCESS_DENIED"));
+        mockMvc.perform(get("/api/staff/branches/{branchId}/live-tables", SILOM).header("Authorization", bearer(managerToken)))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("BRANCH_ACCESS_DENIED"));
         mockMvc.perform(get("/api/staff/branches/{branchId}/live-tables", CENTRAL).header("Authorization", bearer(customerToken)))
                 .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/staff/branches/{branchId}/live-tables", CENTRAL).header("Authorization", bearer(managerToken)))
+                .andExpect(status().isOk());
         mockMvc.perform(get("/api/staff/branches/{branchId}/live-tables", CENTRAL).header("Authorization", bearer(adminToken)))
                 .andExpect(status().isOk());
         mockMvc.perform(post("/api/staff/reservations/{id}/check-in", reservation.get("id").asText())
-                        .header("Authorization", bearer(adminToken)))
-                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("STAFF_OPERATION_REQUIRED"));
-        mockMvc.perform(post("/api/staff/play-sessions/walk-in").header("Authorization", bearer(adminToken))
+                        .header("Authorization", bearer(customerToken)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/staff/play-sessions/walk-in").header("Authorization", bearer(customerToken))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of("branchId", CENTRAL, "tableId", CENTRAL_B1,
-                                "guestName", "Admin must not assign", "playerCount", 4))))
-                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("STAFF_OPERATION_REQUIRED"));
+                                "guestName", "Customer must not assign", "playerCount", 4))))
+                .andExpect(status().isForbidden());
 
         MvcResult checkInResult = mockMvc.perform(post("/api/staff/reservations/{id}/check-in", reservation.get("id").asText())
-                        .header("Authorization", bearer(staffToken)))
+                        .header("Authorization", bearer(adminToken)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("occupied")).andReturn();
         String sessionId = objectMapper.readTree(checkInResult.getResponse().getContentAsString()).get("sessionId").asText();
         mockMvc.perform(get("/api/staff/play-sessions/{id}/checkout", sessionId)
                         .header("Authorization", bearer(adminToken)))
-                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("STAFF_OPERATION_REQUIRED"));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(sessionId));
+        mockMvc.perform(get("/api/staff/play-sessions/{id}/checkout", sessionId)
+                        .header("Authorization", bearer(managerToken)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(sessionId));
         mockMvc.perform(get("/api/staff/branches/{branchId}/live-tables", CENTRAL).header("Authorization", bearer(staffToken)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$[0].status").value("occupied"));
-        mockMvc.perform(post("/api/staff/play-sessions/{id}/checkout", sessionId).header("Authorization", bearer(staffToken))
+        mockMvc.perform(post("/api/staff/play-sessions/{id}/checkout", sessionId).header("Authorization", bearer(managerToken))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"paymentReceived\":true}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("completed"));
 
@@ -313,6 +321,23 @@ class ReservationApiTests {
         StaffBranchAssignment assignment = new StaffBranchAssignment(); assignment.setId(new StaffBranchAssignmentId(staff.getId(), branchId)); assignment.setUser(staff); assignment.setBranch(branches.findById(branchId).orElseThrow()); assignment.setAssignedAt(now); assignment.setPrimary(true); assignments.save(assignment);
         MvcResult login = mockMvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"%s\",\"password\":\"%s\",\"rememberMe\":false}".formatted(staff.getEmail(), PASSWORD)))
+                .andExpect(status().isOk()).andReturn();
+        return objectMapper.readTree(login.getResponse().getContentAsString()).get("accessToken").asText();
+    }
+
+    private String createManagerToken(UUID branchId) throws Exception {
+        OffsetDateTime now = OffsetDateTime.now();
+        User manager = new User();
+        manager.setFirstName("Reservation"); manager.setLastName("Test Manager"); manager.setEmail("reservation-manager-" + UUID.randomUUID() + "@example.test");
+        manager.setPasswordHash(passwordEncoder.encode(PASSWORD)); manager.setStatus(User.UserStatus.active); manager.setCreatedAt(now); manager.setUpdatedAt(now);
+        manager = users.save(manager);
+        Role managerRole = roles.findByCodeAndIsActiveTrue("manager").orElseThrow();
+        UserRole role = new UserRole(); role.setId(new UserRoleId(manager.getId(), managerRole.getId())); role.setUser(manager); role.setRole(managerRole); role.setAssignedAt(now); userRoles.save(role);
+        if (branchId != null) {
+            StaffBranchAssignment assignment = new StaffBranchAssignment(); assignment.setId(new StaffBranchAssignmentId(manager.getId(), branchId)); assignment.setUser(manager); assignment.setBranch(branches.findById(branchId).orElseThrow()); assignment.setAssignedAt(now); assignment.setPrimary(true); assignments.save(assignment);
+        }
+        MvcResult login = mockMvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"%s\",\"password\":\"%s\",\"rememberMe\":false}".formatted(manager.getEmail(), PASSWORD)))
                 .andExpect(status().isOk()).andReturn();
         return objectMapper.readTree(login.getResponse().getContentAsString()).get("accessToken").asText();
     }
