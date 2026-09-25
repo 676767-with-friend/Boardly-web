@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: boardly-db-secret
+  namespace: boardly
+type: Opaque
+stringData:
+  POSTGRES_DB: boardly_db
+  POSTGRES_USER: boardly
+  POSTGRES_PASSWORD: boardly
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: boardly-db-pvc
+  namespace: boardly
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: boardly-db-init
+  namespace: boardly
+data:
+  # NOTE: for a real cluster, load these two files via `kubectl create configmap
+  # boardly-db-init --from-file=database/` instead of pasting SQL here, so schema
+  # and seed data stay in sync with database/Boardly_schema.sql and seed-dev.sql.
+  placeholder.sql: "-- populated from database/Boardly_schema.sql and seed-dev.sql at apply time"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: boardly-db
+  namespace: boardly
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: boardly-db }
+  template:
+    metadata:
+      labels: { app: boardly-db }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports: [{ containerPort: 5432 }]
+          envFrom:
+            - secretRef: { name: boardly-db-secret }
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata
+            - name: init-scripts
+              mountPath: /docker-entrypoint-initdb.d
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "boardly", "-d", "boardly_db"] }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec: { command: ["pg_isready", "-U", "boardly", "-d", "boardly_db"] }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: boardly-db-pvc }
+        - name: init-scripts
+          configMap: { name: boardly-db-init }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: boardly-db
+  namespace: boardly
+spec:
+  selector: { app: boardly-db }
+  ports:
+    - port: 5432
+      targetPort: 5432
