@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: boardly-frontend
+  namespace: boardly
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: boardly-frontend }
+  template:
+    metadata:
+      labels: { app: boardly-frontend }
+    spec:
+      containers:
+        - name: frontend
+          # Jenkins replaces this with <registry>/boardly-frontend:<build-tag> at deploy time
+          image: boardly-frontend:latest
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 80 }]
+          readinessProbe:
+            httpGet: { path: /, port: 80 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits: { cpu: "250m", memory: "256Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: boardly-frontend
+  namespace: boardly
+spec:
+  selector: { app: boardly-frontend }
+  ports:
+    - port: 80
+      targetPort: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: boardly-ingress
+  namespace: boardly
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: boardly.local
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service: { name: boardly-backend, port: { number: 8080 } }
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: boardly-frontend, port: { number: 80 } }
