@@ -47,6 +47,10 @@ jobs:
       SPRING_DATASOURCE_PASSWORD: postgres
     steps:
       - uses: actions/checkout@v4
+      - name: Init database
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d boardly -f database/schema.sql
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
