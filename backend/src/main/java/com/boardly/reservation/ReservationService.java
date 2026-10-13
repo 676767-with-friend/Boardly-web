@@ -3,6 +3,7 @@ package com.boardly.reservation;
 import com.boardly.auth.AuthUser;
 import com.boardly.branch.*;
 import com.boardly.common.exception.BoardlyException;
+import com.boardly.notification.ReservationNotificationService;
 import com.boardly.user.*;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -32,12 +33,13 @@ public class ReservationService {
     private final PlaySessionRepository sessions;
     private final UserRepository users;
     private final StaffBranchAssignmentRepository assignments;
+    private final ReservationNotificationService notifications;
 
     public ReservationService(BranchRepository branches, StoreTableRepository tables,
             BranchOperatingHourRepository hours, BookingBlackoutRepository blackouts,
             BranchPricingRuleRepository pricing, ReservationRepository reservations,
             PlaySessionRepository sessions, UserRepository users,
-            StaffBranchAssignmentRepository assignments) {
+            StaffBranchAssignmentRepository assignments, ReservationNotificationService notifications) {
         this.branches = branches;
         this.tables = tables;
         this.hours = hours;
@@ -47,6 +49,7 @@ public class ReservationService {
         this.sessions = sessions;
         this.users = users;
         this.assignments = assignments;
+        this.notifications = notifications;
     }
 
     @Transactional(readOnly = true)
@@ -97,7 +100,9 @@ public class ReservationService {
         reservation.setCreatedBy(auth.id());
         reservation.setCreatedAt(now);
         reservation.setUpdatedAt(now);
-        return reservationResponse(reservations.save(reservation));
+        Reservation saved = reservations.save(reservation);
+        notifications.scheduleReminders(saved);
+        return reservationResponse(saved);
     }
 
     @Transactional(readOnly = true)
@@ -124,6 +129,7 @@ public class ReservationService {
         reservation.setStatus(Reservation.ReservationStatus.cancelled);
         reservation.setCancelledAt(OffsetDateTime.now());
         reservation.setCancellationReason(request == null ? null : request.reason());
+        notifications.cancelReminders(reservation);
         return reservationResponse(reservation);
     }
 

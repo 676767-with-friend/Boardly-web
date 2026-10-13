@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import BoardlyMark from '@/components/branding/BoardlyMark'
+import NotificationBell from '@/components/navigation/NotificationBell'
 
 export default function CustomerNav({ cartCount, userMode }: { cartCount: number, userMode: 'guest' | 'customer' | 'staff' | 'admin' }) {
   const navigate = useNavigate()
@@ -34,6 +35,7 @@ export default function CustomerNav({ cartCount, userMode }: { cartCount: number
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </button>
+          {userMode === 'customer' && <NotificationBell />}
           <button onClick={() => navigate(userMode === "guest" ? "/login" : "/account")} className="p-2 rounded-xl hover:bg-[#F5F5F7] transition-colors">
             <svg className="w-5 h-5 text-[#1D1D1F]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />

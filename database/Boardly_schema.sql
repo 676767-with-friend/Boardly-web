@@ -816,6 +816,58 @@ BEFORE UPDATE ON branch_product_inventory
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 -- ============================================================
+-- NOTIFICATIONS (in-app, per customer)
+-- channel/type are VARCHAR so new channels need no schema change.
+-- ============================================================
+
+CREATE TABLE notifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    type VARCHAR(50) NOT NULL,          -- reservation_reminder, reservation_confirmed, reservation_cancelled, password_reset, table_turn
+    channel VARCHAR(20) NOT NULL,       -- email, sms, in_app (add more later, e.g. line)
+    recipient_user_id UUID,             -- registered customer or staff
+    recipient_branch_id UUID,           -- in_app alerts shown to staff of this branch
+    recipient_address VARCHAR(255),     -- email/phone for guests without an account
+    subject VARCHAR(255),
+    body TEXT NOT NULL,
+    reservation_id UUID,
+    play_session_id UUID,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    scheduled_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    sent_at TIMESTAMPTZ,
+    read_at TIMESTAMPTZ,                -- used by in_app only
+    attempt_count SMALLINT NOT NULL DEFAULT 0,
+    last_error TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT fk_notifications_user
+        FOREIGN KEY (recipient_user_id) REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT fk_notifications_branch
+        FOREIGN KEY (recipient_branch_id) REFERENCES branches(id) ON DELETE SET NULL,
+    CONSTRAINT fk_notifications_reservation
+        FOREIGN KEY (reservation_id) REFERENCES reservations(id) ON DELETE SET NULL,
+    CONSTRAINT fk_notifications_play_session
+        FOREIGN KEY (play_session_id) REFERENCES play_sessions(id) ON DELETE SET NULL,
+    CONSTRAINT ck_notifications_status
+        CHECK (status IN ('pending', 'sent', 'failed', 'cancelled')),
+    CONSTRAINT ck_notifications_has_recipient
+        CHECK (recipient_user_id IS NOT NULL
+            OR recipient_branch_id IS NOT NULL
+            OR recipient_address IS NOT NULL)
+);
+
+-- Scheduler looks up due notifications quickly.
+CREATE INDEX idx_notifications_due
+ON notifications (scheduled_at) WHERE status = 'pending';
+
+-- Customer inbox: a user's in-app notifications, newest first.
+CREATE INDEX idx_notifications_user_inbox
+ON notifications (recipient_user_id, scheduled_at DESC) WHERE channel = 'in_app';
+
+-- Prevents the scheduler from queuing the same reminder twice.
+CREATE UNIQUE INDEX uq_notifications_reservation_reminder
+ON notifications (reservation_id, type, channel, scheduled_at)
+WHERE reservation_id IS NOT NULL;
+
+-- ============================================================
 -- SOURCE-SUPPORTED SEED DATA
 -- ============================================================
 
