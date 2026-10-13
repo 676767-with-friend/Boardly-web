@@ -42,6 +42,8 @@ docker compose up --build
 
 Warning: `docker compose down -v` permanently removes the Docker development database.
 
+`database/Boardly_schema.sql` is only loaded when the database volume is first created. After pulling a change to it (for example a new table), reset the Docker database as shown above, otherwise the backend fails to start because Hibernate validates the schema (`ddl-auto: validate`).
+
 ## Manual Development
 
 Start only the Docker PostgreSQL service:
@@ -80,7 +82,7 @@ Frontend: `http://localhost:8443`
 
 ## Current Implementation
 
-- **Customer:** shop, account, cart, pickup checkout, orders, and reservations.
+- **Customer:** shop, account, cart, pickup checkout, orders, reservations, and in-app reservation reminders (notification bell in the navigation bar, sent 24 and 2 hours before the reservation).
 - **Staff:** customer/table operations (walk-in sessions, reservation check-in, session checkout preview and payment confirmation, orders, products, and customer lookup) on assigned branches without adding or removing physical tables.
 - **Manager:** all Staff operational capabilities plus assigned-branch physical-table management (add, edit, and deactivate physical tables, zone alignment, and capacity settings).
 - **Admin:** full system permissions including all Staff and Manager capabilities, branch management, staff account creation and role assignment (Staff vs Manager), product catalog, global inventory, and back-office administration.
@@ -91,7 +93,7 @@ Future roadmap items following the `v1.1.0` role model implementation:
 
 - Multi-branch manager assignments with per-branch granular permission overrides.
 - Advanced reporting and analytics dashboards (revenue per table, peak hour utilization, popular board games).
-- Automated table turn notifications and customer SMS/email reservation reminders.
+- Automated table turn notifications and SMS/email notification channels (in-app reservation reminders are already implemented).
 - Split-bill payments and partial payment settlements during session checkout.
 
 ## Versioning
