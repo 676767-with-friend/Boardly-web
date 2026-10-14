@@ -62,8 +62,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     loading,
     error,
     reload,
-    addItem: (productId, quantity = 1) => update(() => cartApi.addItem(productId, quantity)),
-    updateItem: (itemId, quantity) => update(() => cartApi.updateItem(itemId, quantity)),
+    addItem: (productId, quantity = 1) => update(() => {
+      if (!Number.isInteger(quantity) || quantity <= 0) throw new Error('Quantity must be a positive integer.')
+      return cartApi.addItem(productId, quantity)
+    }),
+    updateItem: (itemId, quantity) => update(() => {
+      if (!Number.isInteger(quantity) || quantity <= 0) throw new Error('Quantity must be a positive integer.')
+      return cartApi.updateItem(itemId, quantity)
+    }),
     removeItem: itemId => update(async () => { await cartApi.removeItem(itemId) }),
     clear: () => update(async () => { await cartApi.clear() }),
   }), [cart, loading, error, status, user?.id])
