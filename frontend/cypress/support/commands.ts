@@ -1,37 +1,19 @@
-/// <reference types="cypress" />
-// ***********************************************
-// This example commands.ts shows you how to
-// create various custom commands and overwrite
-// existing commands.
-//
-// For more comprehensive examples of custom
-// commands please read more here:
-// https://on.cypress.io/custom-commands
-// ***********************************************
-//
-//
-// -- This is a parent command --
-// Cypress.Commands.add('login', (email, password) => { ... })
-//
-//
-// -- This is a child command --
-// Cypress.Commands.add('drag', { prevSubject: 'element'}, (subject, options) => { ... })
-//
-//
-// -- This is a dual command --
-// Cypress.Commands.add('dismiss', { prevSubject: 'optional'}, (subject, options) => { ... })
-//
-//
-// -- This will overwrite an existing command --
-// Cypress.Commands.overwrite('visit', (originalFn, url, options) => { ... })
-//
-// declare global {
-//   namespace Cypress {
-//     interface Chainable {
-//       login(email: string, password: string): Chainable<void>
-//       drag(subject: string, options?: Partial<TypeOptions>): Chainable<Element>
-//       dismiss(subject: string, options?: Partial<TypeOptions>): Chainable<Element>
-//       visit(originalFn: CommandOriginalFn, url: string, options: Partial<VisitOptions>): Chainable<Element>
-//     }
-//   }
-// }
+// frontend/cypress/support/commands.ts
+// Custom Cypress commands (โหลดโดย support/e2e.ts)
+
+declare global {
+  namespace Cypress {
+    interface Chainable {
+      /** Stub API ของหน้า Shop: หมวดหมู่ + รายการสินค้า (ใช้ fixtures/categories.json, products.json) */
+      mockCatalog(): Chainable<void>
+    }
+  }
+}
+
+Cypress.Commands.add('mockCatalog', () => {
+  // ใช้ pathname เพื่อให้ match ทุก query string (?category=...&sort=...)
+  cy.intercept({ method: 'GET', pathname: '/api/product-categories' }, { fixture: 'categories.json' }).as('getCategories')
+  cy.intercept({ method: 'GET', pathname: '/api/products' }, { fixture: 'products.json' }).as('getProducts')
+})
+
+export {}

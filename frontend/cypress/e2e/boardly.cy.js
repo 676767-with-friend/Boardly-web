@@ -1,6 +1,7 @@
+// frontend/cypress/e2e/boardly.cy.js
 describe('Boardly - Board Game Store E2E Test Suite', () => {
   beforeEach(() => {
-    cy.visit('http://localhost:8443');
+    cy.visit('/');
   });
 
   // 1. เช็คว่าโหลดหน้าเว็บสำเร็จ
@@ -21,8 +22,9 @@ describe('Boardly - Board Game Store E2E Test Suite', () => {
   });
 
   // 4. เช็คข้อความพาดหัว Hero Banner
+  // หัวข้อเป็น "Find your next<br />favorite game." -> <br> ไม่มีช่องว่างใน text จึงใช้ regex
   it('4. Should display main hero heading text', () => {
-    cy.contains('Find your next favorite game.').should('be.visible');
+    cy.contains('h1', /Find your next\s*favorite game\./).should('be.visible');
   });
 
   // 5. เช็คปุ่ม Shop Board Games
@@ -36,8 +38,9 @@ describe('Boardly - Board Game Store E2E Test Suite', () => {
   });
 
   // 7. เช็คไอคอนเครื่องมือฝั่งขวา (ค้นหา, ล็อกอิน, ตะกร้า)
+  // แถบเมนูบนของลูกค้าเป็น <nav> (ไม่ใช่ <header>)
   it('7. Should display header action icons (search, profile, cart)', () => {
-    cy.get('header').within(() => {
+    cy.get('nav').first().within(() => {
       cy.get('svg, button, a').should('have.length.at.least', 2);
     });
   });
