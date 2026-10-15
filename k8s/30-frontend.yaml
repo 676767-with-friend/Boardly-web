@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: boardly-frontend
+  namespace: boardly
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: boardly-frontend
+  template:
+    metadata:
+      labels:
+        app: boardly-frontend
+    spec:
+      containers:
+        - name: frontend           # Jenkinsfile ใช้ชื่อ container นี้ใน `kubectl set image`
+          image: boardly-frontend:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80    # nginx ใน image ฟังที่พอร์ต 80 (compose map 8443 -> 80)
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: boardly
+spec:
+  selector:
+    app: boardly-frontend
+  ports:
+    - port: 80
+      targetPort: 80

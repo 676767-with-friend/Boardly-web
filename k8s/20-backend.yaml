@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: boardly-backend
+  namespace: boardly
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: boardly-backend
+  template:
+    metadata:
+      labels:
+        app: boardly-backend
+    spec:
+      containers:
+        - name: backend            # Jenkinsfile ใช้ชื่อ container นี้ใน `kubectl set image`
+          image: boardly-backend:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: dev
+            - name: DB_URL
+              value: jdbc:postgresql://db:5432/boardly_db
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef: { name: boardly-secret, key: DB_USERNAME }
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: boardly-secret, key: DB_PASSWORD }
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef: { name: boardly-secret, key: JWT_SECRET }
+            - name: FRONTEND_BASE_URL
+              value: http://localhost:8443
+          resources:
+            requests:
+              memory: 384Mi
+              cpu: 100m
+            limits:
+              memory: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 5
+            failureThreshold: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend           # ชื่อเดียวกับ compose.yaml (nginx.conf น่าจะ proxy ไป backend:8080)
+  namespace: boardly
+spec:
+  selector:
+    app: boardly-backend
+  ports:
+    - port: 8080
+      targetPort: 8080

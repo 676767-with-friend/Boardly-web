@@ -1,0 +1,76 @@
+# ต้องสร้างก่อน apply ไฟล์นี้ (ดูขั้นตอนในคู่มือ):
+#   Secret    boardly-secret   (DB_USERNAME, DB_PASSWORD, JWT_SECRET)
+#   ConfigMap boardly-db-init  (01-schema.sql, 02-seed-dev.sql)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: boardly-db-data
+  namespace: boardly
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: boardly-db
+  namespace: boardly
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate        # PVC แบบ ReadWriteOnce: ห้ามมี 2 pod ใช้พร้อมกันตอนอัปเดต
+  selector:
+    matchLabels:
+      app: boardly-db
+  template:
+    metadata:
+      labels:
+        app: boardly-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: boardly_db
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef: { name: boardly-secret, key: DB_USERNAME }
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: boardly-secret, key: DB_PASSWORD }
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "boardly", "-d", "boardly_db"]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: boardly-db-data
+        - name: init
+          configMap:
+            name: boardly-db-init
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db                # ชื่อเดียวกับ compose.yaml -> DB_URL ใช้ host "db" ได้เหมือนเดิม
+  namespace: boardly
+spec:
+  selector:
+    app: boardly-db
+  ports:
+    - port: 5432
+      targetPort: 5432
