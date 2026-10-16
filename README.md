@@ -1,6 +1,6 @@
 # Boardly
 
-**Current Version: v1.1.0**
+**Current Version: v1.1.1**
 
 Boardly is a full-stack board game store and cafe application for shopping, reservations, store operations, and administration.
 
@@ -14,11 +14,21 @@ docker compose up --build
 
 Open `http://localhost:8443`. No local PostgreSQL, Java, Maven, Node, or pnpm installation is required.
 
+This command runs the application with Docker Compose, not Kubernetes.
+
 Stop the application without deleting data:
 
 ```powershell
 docker compose down
 ```
+
+## CI/CD and Kubernetes
+
+- **GitHub Actions** (`.github/workflows/ci.yml`) runs the frontend build and Vitest, the backend Maven tests with PostgreSQL, and Cypress end-to-end tests through Docker Compose on pushes and pull requests to `main`.
+- **Jenkins** (`Jenkinsfile`) builds and tests the application, builds and pushes Docker images, and is intended to deploy `main` to Minikube.
+- **Kubernetes** manifests currently live in `Tests/10-postgres.yaml`, `Tests/20-backend.yaml`, and `Tests/30-frontend.yaml`.
+
+Kubernetes deployment is not started by `docker compose up --build`. It requires a Kubernetes cluster, `kubectl`, an ingress controller, container images, secrets, and database initialization. The current Jenkins deployment references `k8s/*.yaml` and `k8s/00-namespace.yaml`, which do not yet match the files in `Tests/`; align those paths and add the namespace manifest before using the Kubernetes deployment stage.
 
 ## Development Login
 
