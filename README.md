@@ -52,7 +52,7 @@ docker compose up --build
 
 Warning: `docker compose down -v` permanently removes the Docker development database.
 
-`database/Boardly_schema.sql` is only loaded when the database volume is first created. After pulling a change to it (for example a new table), reset the Docker database as shown above, otherwise the backend fails to start because Hibernate validates the schema (`ddl-auto: validate`).
+`database/Boardly_schema.sql` is only loaded when the database volume is first created. Docker Compose runs `database/migrations/001-create-notifications.sql` before the backend starts to upgrade existing volumes safely. Future schema changes must add and wire a matching idempotent migration. Use the destructive reset above only when intentionally discarding all local data.
 
 ## Manual Development
 

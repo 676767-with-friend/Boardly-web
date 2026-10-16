@@ -20,6 +20,24 @@ services:
       retries: 10
       start_period: 10s
 
+  db-migrate:
+    image: postgres:16-alpine
+    environment:
+      PGPASSWORD: boardly
+    volumes:
+      - ./database/migrations/001-create-notifications.sql:/migrations/001-create-notifications.sql:ro
+    command:
+      - psql
+      - --host=db
+      - --username=boardly
+      - --dbname=boardly_db
+      - --set=ON_ERROR_STOP=1
+      - --file=/migrations/001-create-notifications.sql
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   backend:
     build:
       context: ./backend
@@ -35,6 +53,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/api/health"]
       interval: 5s
