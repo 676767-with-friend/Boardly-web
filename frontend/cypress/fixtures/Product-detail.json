@@ -1,0 +1,21 @@
+{
+  "id": "prod-001",
+  "name": "Catan",
+  "category": "Strategy",
+  "price": 1290,
+  "players": "3-4",
+  "playTime": "60-120 min",
+  "age": "10+",
+  "difficulty": "Medium",
+  "rating": 4.7,
+  "reviewCount": 120,
+  "stock": 25,
+  "image": "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",
+  "description": "Trade, build and settle the island of Catan.",
+  "sku": "BG-CATAN",
+  "publisherName": "Kosmos",
+  "designerName": "Klaus Teuber",
+  "languages": "English",
+  "media": [],
+  "reviews": []
+}

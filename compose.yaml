@@ -1,0 +1,62 @@
+name: boardly
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: boardly_db
+      POSTGRES_USER: boardly
+      POSTGRES_PASSWORD: boardly
+    ports:
+      - "${BOARDLY_DB_PORT:-5433}:5432"
+    volumes:
+      - boardly_postgres_data:/var/lib/postgresql/data
+      - ./database/Boardly_schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./database/seed-dev.sql:/docker-entrypoint-initdb.d/02-seed-dev.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U boardly -d boardly_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      DB_URL: jdbc:postgresql://db:5432/boardly_db
+      DB_USERNAME: boardly
+      DB_PASSWORD: boardly
+      JWT_SECRET: boardly-docker-development-jwt-secret-at-least-32-characters
+      FRONTEND_BASE_URL: http://localhost:8443
+    ports:
+      - "${BOARDLY_BACKEND_PORT:-8080}:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/api/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "${BOARDLY_FRONTEND_PORT:-8443}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  boardly_postgres_data:
