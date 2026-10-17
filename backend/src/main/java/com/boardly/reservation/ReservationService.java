@@ -10,6 +10,7 @@ import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
@@ -21,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ReservationService {
+    private static final ZoneId STORE_ZONE = ZoneId.of("Asia/Bangkok");
     private static final List<Reservation.ReservationStatus> BOOKED_STATUSES = List.of(
             Reservation.ReservationStatus.pending, Reservation.ReservationStatus.confirmed);
 
@@ -79,7 +81,7 @@ public class ReservationService {
         if (!assignment.assignable()) throw conflict(assignment);
 
         BranchPricingRule rule = activeRule(request.branchId(), request.startsAt());
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = now();
         Reservation reservation = new Reservation();
         reservation.setReservationNumber("RSV-" + UUID.randomUUID().toString().replace("-", "")
                 .substring(0, 10).toUpperCase(Locale.ROOT));
@@ -127,7 +129,7 @@ public class ReservationService {
             throw bad("This reservation cannot be cancelled.", "RESERVATION_NOT_CANCELLABLE");
         }
         reservation.setStatus(Reservation.ReservationStatus.cancelled);
-        reservation.setCancelledAt(OffsetDateTime.now());
+        reservation.setCancelledAt(now());
         reservation.setCancellationReason(request == null ? null : request.reason());
         notifications.cancelReminders(reservation);
         return reservationResponse(reservation);
@@ -138,7 +140,7 @@ public class ReservationService {
             LocalDate date, String search) {
         requireStaffOperator(auth);
         authorizeBranch(auth, branchId);
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = now();
         LocalDate selectedDate = date == null ? now.toLocalDate() : date;
         OffsetDateTime dayStart = selectedDate.atStartOfDay().atOffset(now.getOffset());
         OffsetDateTime dayEnd = dayStart.plusDays(1);
@@ -155,7 +157,7 @@ public class ReservationService {
         Reservation reservation = reservations.findById(id)
                 .orElseThrow(() -> notFound("Reservation not found"));
         authorizeBranch(auth, reservation.getBranch().getId());
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = now();
         CheckInEligibility checkIn = checkInEligibility(reservation, now);
         if (!checkIn.eligible()) throw bad(checkIn.reason(), "RESERVATION_NOT_CHECKIN_READY");
 
@@ -189,7 +191,7 @@ public class ReservationService {
     public ReservationDtos.LiveTableResponse walkIn(AuthUser auth, ReservationDtos.WalkInRequest request) {
         requireStaffOperator(auth);
         authorizeBranch(auth, request.branchId());
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = now();
         StoreTable table = tables.findForUpdate(request.tableId(), request.branchId())
                 .orElseThrow(() -> notFound("Table not found"));
         OffsetDateTime dayEnd = now.toLocalDate().plusDays(1).atStartOfDay().atOffset(now.getOffset());
@@ -226,7 +228,7 @@ public class ReservationService {
     public ReservationDtos.CheckoutResponse checkoutPreview(AuthUser auth, UUID id) {
         requireStaffOperator(auth);
         PlaySession session = activeSession(auth, id);
-        return checkoutResponse(session, OffsetDateTime.now(), false);
+        return checkoutResponse(session, now(), false);
     }
 
     @Transactional
@@ -237,7 +239,7 @@ public class ReservationService {
             throw bad("Confirm payment received before checkout.", "PAYMENT_CONFIRMATION_REQUIRED");
         }
         PlaySession session = activeSession(auth, id);
-        OffsetDateTime checkoutAt = OffsetDateTime.now();
+        OffsetDateTime checkoutAt = now();
         session.setCheckOutAt(checkoutAt);
         session.setStatus(PlaySession.PlaySessionStatus.completed);
         session.setClosedBy(auth.id());
@@ -251,7 +253,7 @@ public class ReservationService {
     @Transactional(readOnly = true)
     public List<ReservationDtos.LiveTableResponse> liveTables(AuthUser auth, UUID branchId, short players) {
         authorizeBranch(auth, branchId);
-        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime now = now();
         OffsetDateTime end = now.plusMinutes(1);
         OffsetDateTime dayEnd = now.toLocalDate().plusDays(1).atStartOfDay().atOffset(now.getOffset());
         AssignmentBlock window = windowBlock(branchId, now, end, players);
@@ -475,6 +477,10 @@ public class ReservationService {
 
     private String trimToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private OffsetDateTime now() {
+        return OffsetDateTime.now(STORE_ZONE);
     }
 
     private AssignmentEligibility blocked(String code, String reason) {

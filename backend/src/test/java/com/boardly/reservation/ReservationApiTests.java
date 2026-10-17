@@ -211,6 +211,19 @@ class ReservationApiTests {
     }
 
     @Test
+    void liveTableServerTimeUsesBangkokOffset() throws Exception {
+        isolateCurrentOperations();
+        openAllDay(CENTRAL);
+        String staffToken = createStaffToken(CENTRAL);
+
+        MvcResult result = liveTables(staffToken, 4).andExpect(status().isOk()).andReturn();
+        OffsetDateTime serverTime = OffsetDateTime.parse(
+                objectMapper.readTree(result.getResponse().getContentAsString()).get(0).get("serverTime").asText());
+
+        org.junit.jupiter.api.Assertions.assertEquals(ZoneOffset.ofHours(7), serverTime.getOffset());
+    }
+
+    @Test
     void unavailableAndCapacityIncompatibleTablesCannotBeReserved() throws Exception {
         String customerToken = registerCustomer();
         OffsetDateTime startsAt = futureStart();
