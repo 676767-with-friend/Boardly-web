@@ -252,6 +252,14 @@ describe("ReservationPage", () => {
     await browser.click(screen.getByRole("button", { name: "Continue" }))
 
     fireEvent.change(screen.getByLabelText("Start time"), {
+      target: { value: "" },
+    })
+    await browser.click(screen.getByRole("button", { name: "Continue" }))
+    expect(
+      screen.getByText("Choose a date, time, and duration to continue."),
+    ).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText("Start time"), {
       target: { value: "13:30" },
     })
     await browser.click(screen.getByRole("button", { name: "1h" }))

@@ -165,11 +165,14 @@ export function ReservationPage() {
   }, [])
 
   const startsAt = useMemo(
-    () => localIso(form.date, form.time),
+    () => (form.date && form.time ? localIso(form.date, form.time) : ""),
     [form.date, form.time],
   )
   const endsAt = useMemo(
-    () => endIso(form.date, form.time, form.duration),
+    () =>
+      form.date && form.time
+        ? endIso(form.date, form.time, form.duration)
+        : "",
     [form.date, form.time, form.duration],
   )
   const branch = branches.find((item) => item.id === form.branchId)
