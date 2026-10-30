@@ -70,6 +70,6 @@ GitHub Actions runs the frontend checks, backend tests, and Cypress. Jenkins add
 
 ## Kubernetes
 
-Jenkins creates the database ConfigMap from `database/Boardly_schema.sql` and `database/seed-dev.sql`, then applies `k8s/00-namespace.yaml` through `k8s/30-frontend.yaml`. The cluster needs Docker image registry credentials, `kubectl`, and a configured Kubernetes context.
+Jenkins creates the database ConfigMap from `database/Boardly_schema.sql` and `database/seed-dev.sql`, creates the `boardly-registry` image-pull secret from its registry credentials, then applies `k8s/00-namespace.yaml` through `k8s/30-frontend.yaml`. Configure the Jenkins `boardly-registry-url` credential as the registry host and optional namespace (for example, `docker.io/yourorg`, without a scheme), and `boardly-registry-creds` as a username/password credential. The cluster also needs `kubectl` and a configured Kubernetes context.
 
 The `Tests/` manifests are retained as historical test fixtures; production deployment uses `k8s/`.

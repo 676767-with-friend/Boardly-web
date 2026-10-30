@@ -104,33 +104,49 @@ pipeline {
         stage('Docker: Push Images') {
             when { branch 'main' }
             steps {
-                sh """
-                    echo "\$REGISTRY_AUTH_PSW" | docker login \$REGISTRY --username "\$REGISTRY_AUTH_USR" --password-stdin
-                    docker push ${BACKEND_IMAGE}
-                    docker push ${FRONTEND_IMAGE}
-                """
+                sh '''
+                    set -eu
+                    registry_server="${REGISTRY#https://}"
+                    registry_server="${registry_server#http://}"
+                    registry_server="${registry_server%%/*}"
+                    echo "$REGISTRY_AUTH_PSW" | docker login "$registry_server" --username "$REGISTRY_AUTH_USR" --password-stdin
+                    docker push "$BACKEND_IMAGE"
+                    docker push "$FRONTEND_IMAGE"
+                '''
             }
         }
 
         stage('Deploy: Minikube') {
             when { branch 'main' }
             steps {
-                sh """
+                sh '''
+                    set -eu
                     kubectl apply -f k8s/00-namespace.yaml
-                    kubectl -n ${KUBE_NAMESPACE} create configmap boardly-db-init \\
-                        --from-file=database/Boardly_schema.sql \\
-                        --from-file=database/seed-dev.sql \\
+                    registry_server="${REGISTRY#https://}"
+                    registry_server="${registry_server#http://}"
+                    registry_server="${registry_server%%/*}"
+                    if [ "$registry_server" = "docker.io" ]; then
+                        registry_server="https://index.docker.io/v1/"
+                    fi
+                    kubectl -n "$KUBE_NAMESPACE" create secret docker-registry boardly-registry \
+                        --docker-server="$registry_server" \
+                        --docker-username="$REGISTRY_AUTH_USR" \
+                        --docker-password="$REGISTRY_AUTH_PSW" \
+                        --dry-run=client -o yaml | kubectl apply -f -
+                    kubectl -n "$KUBE_NAMESPACE" create configmap boardly-db-init \
+                        --from-file=database/Boardly_schema.sql \
+                        --from-file=database/seed-dev.sql \
                         --dry-run=client -o yaml | kubectl apply -f -
                     kubectl apply -f k8s/10-postgres.yaml
                     kubectl apply -f k8s/20-backend.yaml
                     kubectl apply -f k8s/30-frontend.yaml
 
-                    kubectl -n ${KUBE_NAMESPACE} set image deployment/boardly-backend backend=${BACKEND_IMAGE}
-                    kubectl -n ${KUBE_NAMESPACE} set image deployment/boardly-frontend frontend=${FRONTEND_IMAGE}
+                    kubectl -n "$KUBE_NAMESPACE" set image deployment/boardly-backend backend="$BACKEND_IMAGE"
+                    kubectl -n "$KUBE_NAMESPACE" set image deployment/boardly-frontend frontend="$FRONTEND_IMAGE"
 
-                    kubectl -n ${KUBE_NAMESPACE} rollout status deployment/boardly-backend --timeout=180s
-                    kubectl -n ${KUBE_NAMESPACE} rollout status deployment/boardly-frontend --timeout=120s
-                """
+                    kubectl -n "$KUBE_NAMESPACE" rollout status deployment/boardly-backend --timeout=180s
+                    kubectl -n "$KUBE_NAMESPACE" rollout status deployment/boardly-frontend --timeout=120s
+                '''
             }
         }
 

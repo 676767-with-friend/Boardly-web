@@ -62,7 +62,9 @@ jobs:
       - name: Init database
         env:
           PGPASSWORD: boardly
-        run: psql -h localhost -U boardly -d boardly_db -v ON_ERROR_STOP=1 -f database/Boardly_schema.sql
+        run: |
+          psql -h localhost -U boardly -d boardly_db -v ON_ERROR_STOP=1 -f database/Boardly_schema.sql
+          psql -h localhost -U boardly -d boardly_db -v ON_ERROR_STOP=1 -f database/seed-dev.sql
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
