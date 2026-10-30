@@ -7,6 +7,7 @@ import { ordersApi } from '@/services/checkoutApi'
 import { reservationsApi, type Reservation } from '@/services/reservationsApi'
 import type { OrderResponse } from '@/types'
 import { fmt } from '@/utils/format'
+import { isValidPhone } from '@/utils/phone'
 
 function message(error: unknown) { return typeof error === 'object' && error && 'message' in error ? String(error.message) : 'Unable to complete that request.' }
 const input = 'w-full border border-[#D2D2D7] rounded-xl px-3.5 py-3 text-sm outline-none focus:border-[#0071E3]'
@@ -19,7 +20,7 @@ export function AccountApiPage() {
   useEffect(() => { let active = true; Promise.all([profileApi.get(), ordersApi.mine(), reservationsApi.mine()]).then(([nextProfile, nextOrders, nextReservations]) => { if (!active) return; setProfile(nextProfile); setOrders(nextOrders); setReservations(nextReservations) }).catch(next => active && setError(message(next))); return () => { active = false } }, [])
   const upcoming = useMemo(() => reservations.find(item => ['pending', 'confirmed'].includes(item.status)), [reservations])
   const recentOrder = orders[0]
-  const save = async (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); if (!profile) return; setSaving(true); setError(null); try { setProfile(await profileApi.update(profile)); await refreshUser(); setEditing(false); setNotice('Profile saved.') } catch (next) { setError(message(next)) } finally { setSaving(false) } }
+  const save = async (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); if (!profile) return; if (profile.phone && !isValidPhone(profile.phone)) { setError('Enter a valid Thai phone number, for example 081-234-5678.'); return } setSaving(true); setError(null); try { setProfile(await profileApi.update({ ...profile, phone: profile.phone?.replace(/\D/g, '') || null })); await refreshUser(); setEditing(false); setNotice('Profile saved.') } catch (next) { setError(message(next)) } finally { setSaving(false) } }
   if (!profile) return <div className="max-w-4xl mx-auto px-6 py-16 text-center text-[#6E6E73]">{error ?? 'Loading your account...'}</div>
   const displayName = profile.displayName || `${profile.firstName} ${profile.lastName}`
   const initials = `${profile.firstName[0] ?? ''}${profile.lastName[0] ?? ''}`.toUpperCase()

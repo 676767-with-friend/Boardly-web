@@ -7,6 +7,7 @@ import {
   type LiveTable,
   type StaffReservation,
 } from "@/services/reservationsApi"
+import { isValidPhone } from "@/utils/phone"
 
 const inputClass = "w-full rounded-xl border border-[#D2D2D7] bg-white px-3.5 py-3 text-sm text-[#1D1D1F] outline-none focus:border-[#0071E3]"
 const statusStyle = {
@@ -137,6 +138,7 @@ function WalkInModal({ table, branchId, defaultPlayers, onClose, onComplete, onE
   const findCustomers = () => staffApi.users(search).then(setCustomers).catch(next => onError(errorMessage(next, "Unable to search customers.")))
   const submit = async () => {
     if ((mode === "guest" && !guest.guestName.trim()) || (mode === "customer" && !userId)) return
+    if (mode === "guest" && guest.guestPhone && !isValidPhone(guest.guestPhone)) { onError("Enter a valid Thai phone number, for example 081-234-5678."); return }
     setSaving(true)
     try {
       await staffReservationsApi.walkIn({ branchId, tableId: table.id, playerCount: players, ...(mode === "guest" ? guest : { userId }) })

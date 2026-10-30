@@ -15,7 +15,7 @@ public final class ManagementDtos {
     private ManagementDtos() {}
 
     public record ProfileResponse(UUID id, String firstName, String lastName, String displayName, String email, String phone) {}
-    public record UpdateProfileRequest(@NotBlank @Size(max = 100) String firstName, @NotBlank @Size(max = 100) String lastName, @Size(max = 100) String displayName, @Size(max = 30) String phone) {}
+    public record UpdateProfileRequest(@NotBlank @Size(max = 100) String firstName, @NotBlank @Size(max = 100) String lastName, @Size(max = 100) String displayName, @jakarta.validation.constraints.Pattern(regexp = "^$|0[689][0-9]{8}|0[2-5][0-9]{7,8}", message = "Enter a valid Thai phone number") @Size(max = 30) String phone) {}
     public record DashboardResponse(String branchName, long totalTables, long availableTables, long unavailableTables, long activeSessions, long reservationsToday, long orders, long activeBranches, long activeStaff, BigDecimal salesToday) {}
     public record OrderSummaryResponse(String orderNumber, String customerName, String status, String fulfillmentMethod, String pickupBranchName, BigDecimal totalAmount, String currency, int itemCount, OffsetDateTime placedAt) {}
     public record UserSummaryResponse(UUID id, String name, String email, String phone, String status, List<String> roles, long orderCount, long reservationCount, long completedVisits, OffsetDateTime lastActivity) {}

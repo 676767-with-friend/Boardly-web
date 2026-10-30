@@ -117,6 +117,10 @@ pipeline {
             steps {
                 sh """
                     kubectl apply -f k8s/00-namespace.yaml
+                    kubectl -n ${KUBE_NAMESPACE} create configmap boardly-db-init \\
+                        --from-file=database/Boardly_schema.sql \\
+                        --from-file=database/seed-dev.sql \\
+                        --dry-run=client -o yaml | kubectl apply -f -
                     kubectl apply -f k8s/10-postgres.yaml
                     kubectl apply -f k8s/20-backend.yaml
                     kubectl apply -f k8s/30-frontend.yaml

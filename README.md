@@ -1,38 +1,26 @@
 # Boardly
 
-**Current Version: v1.1.1**
+Boardly is a board-game shop and cafe: customers can shop and reserve tables, while staff manage live tables, sessions, reservations, orders, and checkout.
 
-Boardly is a full-stack board game store and cafe application for shopping, reservations, store operations, and administration.
+## Run with Docker Compose
 
-## Quick Start with Docker
-
-Requirements: Git and Docker with Docker Compose.
+Requirements: Docker Desktop with Compose.
 
 ```powershell
 docker compose up --build
 ```
 
-Open `http://localhost:8443`. No local PostgreSQL, Java, Maven, Node, or pnpm installation is required.
+Open <http://localhost:8443>. The backend is at <http://localhost:8080> and its health endpoint is <http://localhost:8080/api/health>.
 
-This command runs the application with Docker Compose, not Kubernetes.
-
-Stop the application without deleting data:
+Stop without deleting the database:
 
 ```powershell
 docker compose down
 ```
 
-## CI/CD and Kubernetes
+To intentionally delete local development data, use `docker compose down -v`.
 
-- **GitHub Actions** (`.github/workflows/ci.yml`) runs the frontend build and Vitest, the backend Maven tests with PostgreSQL, and Cypress end-to-end tests through Docker Compose on pushes and pull requests to `main`.
-- **Jenkins** (`Jenkinsfile`) builds and tests the application, builds and pushes Docker images, and is intended to deploy `main` to Minikube.
-- **Kubernetes** manifests currently live in `Tests/10-postgres.yaml`, `Tests/20-backend.yaml`, and `Tests/30-frontend.yaml`.
-
-Kubernetes deployment is not started by `docker compose up --build`. It requires a Kubernetes cluster, `kubectl`, an ingress controller, container images, secrets, and database initialization. The current Jenkins deployment references `k8s/*.yaml` and `k8s/00-namespace.yaml`, which do not yet match the files in `Tests/`; align those paths and add the namespace manifest before using the Kubernetes deployment stage.
-
-## Development Login
-
-Development/demo use only. PostgreSQL stores these passwords as BCrypt hashes.
+## Development accounts
 
 | Role | Email | Password |
 | --- | --- | --- |
@@ -41,46 +29,29 @@ Development/demo use only. PostgreSQL stores these passwords as BCrypt hashes.
 | Manager | `manager@boardly.com` | `manager` |
 | Admin | `admin@boardly.com` | `admin` |
 
-## Reset the Docker Database
+These accounts are for local development only.
 
-Only when intentionally deleting all local Docker development data:
+## Run locally
 
-```powershell
-docker compose down -v
-docker compose up --build
-```
-
-Warning: `docker compose down -v` permanently removes the Docker development database.
-
-`database/Boardly_schema.sql` is only loaded when the database volume is first created. Docker Compose runs `database/migrations/001-create-notifications.sql` before the backend starts to upgrade existing volumes safely. Future schema changes must add and wire a matching idempotent migration. Use the destructive reset above only when intentionally discarding all local data.
-
-## Manual Development
-
-Start only the Docker PostgreSQL service:
+Start PostgreSQL first:
 
 ```powershell
 docker compose up -d db
 ```
 
-Run the backend with Java 21 and Maven:
+Backend:
 
 ```powershell
 cd backend
-
 $env:SPRING_PROFILES_ACTIVE="dev"
 $env:DB_URL="jdbc:postgresql://localhost:5433/boardly_db"
 $env:DB_USERNAME="boardly"
 $env:DB_PASSWORD="boardly"
 $env:JWT_SECRET="boardly-local-development-jwt-secret-at-least-32-characters"
-
 mvn spring-boot:run
 ```
 
-Backend: `http://localhost:8080`
-
-Health: `http://localhost:8080/api/health`
-
-Run the frontend with Node.js and pnpm:
+Frontend:
 
 ```powershell
 cd frontend
@@ -88,24 +59,17 @@ pnpm install
 pnpm dev
 ```
 
-Frontend: `http://localhost:8443`
+## Checks
 
-## Current Implementation
+```powershell
+cd frontend; npm ci; npm run build; npm test
+cd ../backend; mvn -B verify
+```
 
-- **Customer:** shop, account, cart, pickup checkout, orders, reservations, and in-app reservation reminders (notification bell in the navigation bar, sent 24 and 2 hours before the reservation).
-- **Staff:** customer/table operations (walk-in sessions, reservation check-in, session checkout preview and payment confirmation, orders, products, and customer lookup) on assigned branches without adding or removing physical tables.
-- **Manager:** all Staff operational capabilities plus assigned-branch physical-table management (add, edit, and deactivate physical tables, zone alignment, and capacity settings).
-- **Admin:** full system permissions including all Staff and Manager capabilities, branch management, staff account creation and role assignment (Staff vs Manager), product catalog, global inventory, and back-office administration.
+GitHub Actions runs the frontend checks, backend tests, and Cypress. Jenkins additionally builds/pushes both images and deploys the manifests in `k8s/` to Kubernetes on `main`.
 
-## Planned Improvements / Future Work
+## Kubernetes
 
-Future roadmap items following the `v1.1.0` role model implementation:
+Jenkins creates the database ConfigMap from `database/Boardly_schema.sql` and `database/seed-dev.sql`, then applies `k8s/00-namespace.yaml` through `k8s/30-frontend.yaml`. The cluster needs Docker image registry credentials, `kubectl`, and a configured Kubernetes context.
 
-- Multi-branch manager assignments with per-branch granular permission overrides.
-- Advanced reporting and analytics dashboards (revenue per table, peak hour utilization, popular board games).
-- Automated table turn notifications and SMS/email notification channels (in-app reservation reminders are already implemented).
-- Split-bill payments and partial payment settlements during session checkout.
-
-## Versioning
-
-Boardly uses Semantic Versioning (`MAJOR.MINOR.PATCH`). Current release is `v1.1.0`.
+The `Tests/` manifests are retained as historical test fixtures; production deployment uses `k8s/`.

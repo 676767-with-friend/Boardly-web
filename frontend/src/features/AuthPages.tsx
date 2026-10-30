@@ -4,6 +4,7 @@ import { useAuth } from '@/auth/AuthProvider'
 import { authApi } from '@/services/authApi'
 import BoardlyMark from '@/components/branding/BoardlyMark'
 import { roleHome } from '@/auth/RouteGuards'
+import { formatPhone, isValidPhone } from '@/utils/phone'
 
 function errorMessage(error: unknown) {
   if (typeof error === 'object' && error && 'message' in error && typeof error.message === 'string') return error.message
@@ -114,6 +115,7 @@ export function RegisterPage() {
     if (values.password.length < 12) return setError('Password must be at least 12 characters.')
     if (values.password !== values.confirmPassword) return setError('Passwords do not match.')
     if (!values.consent) return setError('Please accept the terms and privacy policy.')
+    if (values.phone && !isValidPhone(values.phone)) return setError('Enter a valid Thai phone number, for example 081-234-5678.')
     setSubmitting(true)
     try {
       await register({
@@ -145,7 +147,7 @@ export function RegisterPage() {
           </div>
           <Field label="Display Name" value={values.displayName} onChange={event => set('displayName', event.target.value)} />
           <Field label="Email" type="email" autoComplete="email" value={values.email} onChange={event => set('email', event.target.value)} />
-          <Field label="Phone" type="tel" autoComplete="tel" value={values.phone} onChange={event => set('phone', event.target.value)} />
+          <Field label="Phone" type="tel" autoComplete="tel" value={values.phone} onChange={event => set('phone', formatPhone(event.target.value))} />
           <div className="grid grid-cols-2 gap-3">
             <Field label="Password" type="password" autoComplete="new-password" value={values.password} onChange={event => set('password', event.target.value)} />
             <Field label="Confirm" type="password" autoComplete="new-password" value={values.confirmPassword} onChange={event => set('confirmPassword', event.target.value)} />

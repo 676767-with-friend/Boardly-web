@@ -12,6 +12,7 @@ import {
   type Reservation,
 } from "@/services/reservationsApi"
 import type { PublicBranch } from "@/types"
+import { formatPhone, isValidPhone } from "@/utils/phone"
 
 const BANGKOK_OFFSET = "+07:00"
 const inputClass =
@@ -231,11 +232,15 @@ export function ReservationPage() {
     setSubmitting(true)
     setError(null)
     try {
+      if (form.contactPhone && !isValidPhone(form.contactPhone)) {
+        setError("Enter a valid Thai phone number, for example 081-234-5678.")
+        return
+      }
       const reservation = await reservationsApi.create({
         branchId: form.branchId,
         tableId: selectedTable.id,
         contactName: form.contactName,
-        contactPhone: form.contactPhone || undefined,
+        contactPhone: form.contactPhone.replace(/\D/g, "") || undefined,
         contactEmail: form.contactEmail || undefined,
         startsAt,
         endsAt,
@@ -451,7 +456,7 @@ export function ReservationPage() {
                     type="tel"
                     value={form.contactPhone}
                     onChange={(event) =>
-                      setForm({ ...form, contactPhone: event.target.value })
+                      setForm({ ...form, contactPhone: formatPhone(event.target.value) })
                     }
                     className={inputClass}
                   />

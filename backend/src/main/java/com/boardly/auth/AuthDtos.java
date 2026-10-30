@@ -18,7 +18,7 @@ public final class AuthDtos {
             @NotBlank(message = "Last name is required") @Size(max = 100) String lastName,
             @Size(max = 100) String displayName,
             @NotBlank(message = "Email is required") @Email(message = "Enter a valid email address") @Size(max = 255) String email,
-            @Size(max = 30) String phone,
+            @Pattern(regexp = "^$|0[689][0-9]{8}|0[2-5][0-9]{7,8}", message = "Enter a valid Thai phone number") @Size(max = 30) String phone,
             @NotBlank(message = "Password is required") @Size(min = 12, max = 128, message = "Password must be 12 to 128 characters") String password,
             @NotNull(message = "Terms acceptance is required") Boolean acceptTerms,
             @NotNull(message = "Privacy acceptance is required") Boolean acceptPrivacy) {

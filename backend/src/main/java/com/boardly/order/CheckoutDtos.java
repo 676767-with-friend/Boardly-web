@@ -18,7 +18,7 @@ public final class CheckoutDtos {
             @NotBlank @Size(max = 100) String contactFirstName,
             @NotBlank @Size(max = 100) String contactLastName,
             @NotBlank @Email @Size(max = 255) String contactEmail,
-            @Size(max = 30) String contactPhone,
+            @jakarta.validation.constraints.Pattern(regexp = "^$|0[689][0-9]{8}|0[2-5][0-9]{7,8}", message = "Enter a valid Thai phone number") @Size(max = 30) String contactPhone,
             @NotNull UUID fulfillmentMethodId,
             UUID pickupBranchId,
             @NotNull UUID paymentMethodId,

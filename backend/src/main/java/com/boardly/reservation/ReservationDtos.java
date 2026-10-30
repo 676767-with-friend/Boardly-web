@@ -3,6 +3,7 @@ package com.boardly.reservation;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Pattern;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -14,7 +15,7 @@ public final class ReservationDtos {
     public record AvailableTableResponse(UUID id, String code, String zone, short minPlayers, short maxPlayers) { }
     public record AvailabilityResponse(OffsetDateTime startsAt, OffsetDateTime endsAt, short players, BigDecimal estimatedFee, String currency, List<AvailableTableResponse> tables) { }
     public record CreateReservationRequest(@NotNull UUID branchId, @NotNull UUID tableId, @NotBlank String contactName,
-                                           String contactPhone, String contactEmail, @NotNull OffsetDateTime startsAt,
+                                           @Pattern(regexp = "^$|0[689][0-9]{8}|0[2-5][0-9]{7,8}", message = "Enter a valid Thai phone number") String contactPhone, String contactEmail, @NotNull OffsetDateTime startsAt,
                                            @NotNull OffsetDateTime endsAt, @Positive short playerCount) { }
     public record CancelReservationRequest(String reason) { }
     public record ReservationResponse(UUID id, String reservationNumber, UUID branchId, String branchName, UUID tableId,
@@ -27,7 +28,7 @@ public final class ReservationDtos {
                                            String checkInBlockReason) { }
     public record CheckInRequest() { }
     public record WalkInRequest(@NotNull UUID branchId, @NotNull UUID tableId, UUID userId, String guestName,
-                                String guestPhone, String guestEmail, @Positive short playerCount) { }
+                                @Pattern(regexp = "^$|0[689][0-9]{8}|0[2-5][0-9]{7,8}", message = "Enter a valid Thai phone number") String guestPhone, String guestEmail, @Positive short playerCount) { }
     public record CheckoutRequest(boolean paymentReceived) { }
     public record CheckoutResponse(UUID id, String status, String client, String tableCode, OffsetDateTime checkInAt,
                                    OffsetDateTime checkOutAt, OffsetDateTime serverTime, Integer bookedDurationMinutes,
