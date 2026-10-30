@@ -84,12 +84,12 @@ docker run --rm --network boardly_default `
   -e DB_URL=jdbc:postgresql://db:5432/boardly_db `
   -e DB_USERNAME=boardly -e DB_PASSWORD=boardly `
   -e JWT_SECRET=local-test-jwt-secret-at-least-32-characters-long `
-  maven:3.9-eclipse-temurin-21 mvn -B verify
+  maven:3.9-eclipse-temurin-21-alpine mvn -B test
 ```
 
 Expected result: `BUILD SUCCESS` with no failing tests. The first run downloads dependencies and is slower; `boardly-m2` caches them for later runs.
 
-If Java 21 and Maven are installed locally, use the environment variables from "Run locally" (database on `localhost:5433`) and run `mvn -B verify` in `backend/`.
+If Java 21 and Maven are installed locally, use the environment variables from "Run locally" (database on `localhost:5433`) and run `mvn -B test` in `backend/`.
 
 ### Coverage report
 
