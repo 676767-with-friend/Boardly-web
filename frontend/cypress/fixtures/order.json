@@ -1,0 +1,17 @@
+{
+  "orderNumber": "BG-2026-0001",
+  "status": "confirmed",
+  "fulfillmentMethod": "Store Pickup",
+  "pickupBranchName": "Central Branch",
+  "subtotal": 3070,
+  "shippingFee": 0,
+  "totalAmount": 3070,
+  "currency": "THB",
+  "estimatedDeliveryDate": null,
+  "paymentStatus": "pending",
+  "paymentMethod": "Development Mock Payment",
+  "items": [
+    { "productId": "prod-001", "name": "Catan", "sku": "BG-CATAN", "unitPrice": 1290, "quantity": 1, "lineTotal": 1290 },
+    { "productId": "prod-002", "name": "Azul", "sku": "BG-AZUL", "unitPrice": 890, "quantity": 2, "lineTotal": 1780 }
+  ]
+}

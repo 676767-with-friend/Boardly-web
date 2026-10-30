@@ -1,0 +1,28 @@
+{
+  "id": "cart-001",
+  "items": [
+    {
+      "id": "item-001",
+      "productId": "prod-001",
+      "name": "Catan",
+      "sku": "BG-CATAN",
+      "image": "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",
+      "unitPrice": 1290,
+      "quantity": 1,
+      "lineTotal": 1290
+    },
+    {
+      "id": "item-002",
+      "productId": "prod-002",
+      "name": "Azul",
+      "sku": "BG-AZUL",
+      "image": null,
+      "unitPrice": 890,
+      "quantity": 2,
+      "lineTotal": 1780
+    }
+  ],
+  "itemCount": 3,
+  "subtotal": 3070,
+  "currency": "THB"
+}
