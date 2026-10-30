@@ -50,3 +50,5 @@ build/
 # beside it.
 /.plugins/
 /.opencode-skills/
+frontend/cypress/screenshots/
+frontend/cypress/videos/
