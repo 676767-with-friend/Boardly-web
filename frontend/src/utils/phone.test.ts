@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { normalizeThaiPhone, thaiPhoneError } from "./phone"
+import {
+  formatPhone,
+  isValidPhone,
+  normalizeThaiPhone,
+  thaiPhoneError,
+} from "./phone"
 
 describe("Thai phone validation", () => {
   it.each([
@@ -28,5 +33,11 @@ describe("Thai phone validation", () => {
   it("normalizes separators and +66 to domestic digits", () => {
     expect(normalizeThaiPhone(" +66 81-234-5678 ")).toBe("0812345678")
     expect(normalizeThaiPhone("02-123-4567")).toBe("021234567")
+  })
+
+  it("formats and validates Thai mobile numbers", () => {
+    expect(formatPhone("0812345678")).toBe("081-234-5678")
+    expect(isValidPhone("081-234-5678")).toBe(true)
+    expect(isValidPhone("123")).toBe(false)
   })
 })

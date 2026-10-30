@@ -1,0 +1,22 @@
+{
+  "fulfillmentMethods": [
+    {
+      "id": "ful-pickup",
+      "code": "store_pickup",
+      "name": "Store Pickup",
+      "baseFee": 0,
+      "etaMinDays": null,
+      "etaMaxDays": null,
+      "storePickup": true,
+      "checkoutAvailable": true,
+      "unavailableReason": null
+    }
+  ],
+  "paymentMethods": [
+    { "id": "pay-dev", "code": "dev_mock", "name": "Development Mock Payment" }
+  ],
+  "eligiblePickupBranches": [
+    { "id": "br-central", "name": "Central Branch", "address": "1 Sukhumvit Road", "district": "Watthana" },
+    { "id": "br-silom", "name": "Silom Branch", "address": "88 Silom Road", "district": "Bang Rak" }
+  ]
+}

@@ -1,3 +1,4 @@
+
 # Secrets
 .env
 .env.*
@@ -51,3 +52,7 @@ build/
 # beside it.
 /.plugins/
 /.opencode-skills/
+
+# Cypress generated files
+frontend/cypress/screenshots/
+frontend/cypress/videos/

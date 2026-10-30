@@ -13,6 +13,8 @@ spec:
       labels:
         app: boardly-frontend
     spec:
+      imagePullSecrets:
+        - name: boardly-registry-pull
       containers:
         - name: frontend
           image: boardly-frontend:local
