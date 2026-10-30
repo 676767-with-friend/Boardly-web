@@ -17,6 +17,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
@@ -26,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(CartCheckoutApiTests.PaymentTestConfiguration.class)
 @Transactional
 class CartCheckoutApiTests {
     private static final String WINGSPAN_ID = "20000000-0000-0000-0000-000000000001";
@@ -130,6 +135,44 @@ class CartCheckoutApiTests {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void checkoutRejectsInvalidPhoneWhenFrontendValidationIsBypassed() throws Exception {
+        String accessToken = registerAndGetAccessToken();
+        addAuthenticatedCartItem(accessToken, 1);
+        String body = """
+                {"contactFirstName":"Direct","contactLastName":"API","contactEmail":"direct-api@example.test",
+                 "contactPhone":"not-a-phone","fulfillmentMethodId":"%s","pickupBranchId":"%s","paymentMethodId":"%s"}
+                """.formatted(pickupMethodId(), CENTRAL_BRANCH_ID, paymentMethodId());
+
+        mockMvc.perform(post("/api/checkout").header("Authorization", "Bearer " + accessToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    void checkoutRejectsEmptyCartAndInvalidSelections() throws Exception {
+        String accessToken = registerAndGetAccessToken();
+
+        checkout(accessToken, pickupMethodId(), CENTRAL_BRANCH_ID, paymentMethodId())
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("CART_EMPTY"));
+
+        addAuthenticatedCartItem(accessToken, 1);
+        checkout(accessToken, UUID.randomUUID().toString(), CENTRAL_BRANCH_ID, paymentMethodId())
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("FULFILLMENT_METHOD_INVALID"));
+        checkout(accessToken, pickupMethodId(), null, paymentMethodId())
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PICKUP_BRANCH_REQUIRED"));
+        checkout(accessToken, pickupMethodId(), UUID.randomUUID().toString(), paymentMethodId())
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PICKUP_BRANCH_INVALID"));
+        checkout(accessToken, pickupMethodId(), CENTRAL_BRANCH_ID, UUID.randomUUID().toString())
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PAYMENT_METHOD_INVALID"));
+    }
+
     private void addAuthenticatedCartItem(String accessToken, int quantity) throws Exception {
         mockMvc.perform(post("/api/cart/items").header("Authorization", "Bearer " + accessToken)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"productId\":\"" + WINGSPAN_ID + "\",\"quantity\":" + quantity + "}"))
@@ -173,5 +216,14 @@ class CartCheckoutApiTests {
     private int reservedQuantity() {
         return inventoryRepository.findById(new com.boardly.inventory.BranchProductInventoryId(UUID.fromString(CENTRAL_BRANCH_ID), UUID.fromString(WINGSPAN_ID)))
                 .orElseThrow().getReservedQuantity();
+    }
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class PaymentTestConfiguration {
+        @Bean
+        @Primary
+        PaymentService testPaymentService(PaymentRepository paymentRepository) {
+            return new DevMockPaymentService(paymentRepository);
+        }
     }
 }

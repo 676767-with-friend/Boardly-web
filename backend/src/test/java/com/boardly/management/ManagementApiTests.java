@@ -61,8 +61,12 @@ class ManagementApiTests {
         mockMvc.perform(get("/api/me/profile").header("Authorization", bearer(customerToken)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.email").value("management-customer@example.test"));
         mockMvc.perform(put("/api/me/profile").header("Authorization", bearer(customerToken)).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"firstName\":\"Updated\",\"lastName\":\"Customer\",\"displayName\":\"Updated\",\"phone\":\"0812345678\"}"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.firstName").value("Updated"));
+                .content("{\"firstName\":\"Updated\",\"lastName\":\"Customer\",\"displayName\":\"Updated\",\"phone\":\" +66 81-234-5678 \"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.firstName").value("Updated"))
+                .andExpect(jsonPath("$.phone").value("0812345678"));
+        mockMvc.perform(put("/api/me/profile").header("Authorization", bearer(customerToken)).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"firstName\":\"Updated\",\"lastName\":\"Customer\",\"displayName\":\"Updated\",\"phone\":\"not-a-phone\"}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
         mockMvc.perform(get("/api/staff/dashboard").header("Authorization", bearer(customerToken))).andExpect(status().isForbidden());
         mockMvc.perform(get("/api/admin/dashboard").header("Authorization", bearer(customerToken))).andExpect(status().isForbidden());
 
@@ -115,6 +119,9 @@ class ManagementApiTests {
         mockMvc.perform(get("/api/staff/branches").header("Authorization", bearer(staffToken)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$[0].id").value(CENTRAL.toString()))
                 .andExpect(jsonPath("$.length()").value(1));
+        mockMvc.perform(get("/api/staff/products").header("Authorization", bearer(staffToken))
+                        .param("branchId", CENTRAL.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$").isArray());
         long movementCount = movements.count();
         mockMvc.perform(patch("/api/staff/inventory/{productId}",
                         UUID.fromString("20000000-0000-0000-0000-000000000002"))
@@ -189,6 +196,32 @@ class ManagementApiTests {
         mockMvc.perform(post("/api/admin/tables").header("Authorization", bearer(managerToken))
                         .contentType(MediaType.APPLICATION_JSON).content(unassignedTableBody))
                 .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("BRANCH_ACCESS_DENIED"));
+    }
+
+    @Test
+    void staffWithoutABranchAndInvalidInventoryAdjustmentsAreRejected() throws Exception {
+        JsonNode unassigned = register("management-unassigned-staff@example.test");
+        grant(unassigned.path("user").path("id").asText(), "staff", null);
+        String unassignedToken = login("management-unassigned-staff@example.test");
+        mockMvc.perform(get("/api/staff/dashboard").header("Authorization", bearer(unassignedToken)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("BRANCH_ACCESS_DENIED"));
+
+        JsonNode admin = register("management-invalid-inventory-admin@example.test");
+        grant(admin.path("user").path("id").asText(), "admin", null);
+        String adminToken = login("management-invalid-inventory-admin@example.test");
+        UUID productId = UUID.fromString("20000000-0000-0000-0000-000000000001");
+
+        mockMvc.perform(patch("/api/admin/inventory/{productId}", productId)
+                        .header("Authorization", bearer(adminToken)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"branchId\":\"" + CENTRAL + "\",\"quantityDelta\":0}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        mockMvc.perform(patch("/api/admin/inventory/{productId}", productId)
+                        .header("Authorization", bearer(adminToken)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"branchId\":\"" + CENTRAL + "\",\"quantityDelta\":-100000}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 
     private JsonNode register(String email) throws Exception {

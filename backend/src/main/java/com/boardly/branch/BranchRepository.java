@@ -6,4 +6,6 @@ import java.util.UUID;
 
 @Repository
 public interface BranchRepository extends JpaRepository<Branch, UUID> {
+    boolean existsByCodeIgnoreCase(String code);
+    boolean existsByCodeIgnoreCaseAndIdNot(String code, UUID id);
 }

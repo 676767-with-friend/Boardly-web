@@ -1,5 +1,7 @@
 package com.boardly.management;
 
+import com.boardly.common.validation.PhoneNumbers;
+
 import com.boardly.auth.AuthUser;
 import com.boardly.branch.Branch;
 import com.boardly.branch.BranchRepository;
@@ -94,7 +96,7 @@ public class ManagementService {
     public ProfileResponse updateProfile(AuthUser principal, UpdateProfileRequest request) {
         User user = requiredUser(principal.id());
         user.setFirstName(request.firstName().trim()); user.setLastName(request.lastName().trim());
-        user.setDisplayName(blankToNull(request.displayName())); user.setPhone(blankToNull(request.phone()));
+        user.setDisplayName(blankToNull(request.displayName())); user.setPhone(PhoneNumbers.normalize(request.phone()));
         user.setUpdatedAt(OffsetDateTime.now());
         return profile(users.save(user));
     }
@@ -182,7 +184,7 @@ public class ManagementService {
         validateBranches(request.branchIds(), request.primaryBranchId());
         OffsetDateTime now = OffsetDateTime.now();
         User user = new User(); user.setFirstName(request.firstName().trim()); user.setLastName(request.lastName().trim());
-        user.setDisplayName(blankToNull(request.displayName())); user.setEmail(email); user.setPhone(blankToNull(request.phone()));
+        user.setDisplayName(blankToNull(request.displayName())); user.setEmail(email); user.setPhone(PhoneNumbers.normalize(request.phone()));
         user.setPasswordHash(passwordEncoder.encode(request.password())); user.setStatus(User.UserStatus.active); user.setCreatedAt(now); user.setUpdatedAt(now);
         user = users.save(user);
         String assignedRole = "manager".equalsIgnoreCase(request.role()) ? "manager" : "staff";
@@ -197,7 +199,7 @@ public class ManagementService {
         List<String> currentRoles = userRoles.findActiveRoleCodesByUserId(userId);
         if (!currentRoles.contains("staff") && !currentRoles.contains("manager")) throw notFound("Staff member");
         validateBranches(request.branchIds(), request.primaryBranchId());
-        user.setFirstName(request.firstName().trim()); user.setLastName(request.lastName().trim()); user.setDisplayName(blankToNull(request.displayName())); user.setPhone(blankToNull(request.phone()));
+        user.setFirstName(request.firstName().trim()); user.setLastName(request.lastName().trim()); user.setDisplayName(blankToNull(request.displayName())); user.setPhone(PhoneNumbers.normalize(request.phone()));
         user.setStatus(enumValue(User.UserStatus.class, request.status(), "User status")); user.setUpdatedAt(OffsetDateTime.now()); users.save(user);
         if (request.role() != null && !request.role().isBlank()) {
             String targetRole = "manager".equalsIgnoreCase(request.role()) ? "manager" : "staff";
@@ -211,19 +213,19 @@ public class ManagementService {
     public List<BranchResponse> branches() { return branches.findAll().stream().sorted(Comparator.comparing(Branch::getName)).map(this::branch).toList(); }
 
     @Transactional
-    public BranchResponse createBranch(BranchRequest request) { Branch branch = new Branch(); applyBranch(branch, request); return branch(branches.save(branch)); }
+    public BranchResponse createBranch(BranchRequest request) { String code = request.code().trim(); if (branches.existsByCodeIgnoreCase(code)) throw conflict("A branch with this code already exists"); Branch branch = new Branch(); branch.setCreatedAt(OffsetDateTime.now()); applyBranch(branch, request); return branch(branches.save(branch)); }
 
     @Transactional
-    public BranchResponse updateBranch(UUID id, BranchRequest request) { Branch branch = requiredBranch(id); applyBranch(branch, request); return branch(branches.save(branch)); }
+    public BranchResponse updateBranch(UUID id, BranchRequest request) { Branch branch = requiredBranch(id); if (branches.existsByCodeIgnoreCaseAndIdNot(request.code().trim(), id)) throw conflict("A branch with this code already exists"); applyBranch(branch, request); return branch(branches.save(branch)); }
 
     @Transactional(readOnly = true)
     public List<ProductManagementResponse> products() { return products.findAll().stream().sorted(Comparator.comparing(Product::getName)).map(this::product).toList(); }
 
     @Transactional
-    public ProductManagementResponse createProduct(ProductManagementRequest request) { Product product = new Product(); applyProduct(product, request); return product(products.save(product)); }
+    public ProductManagementResponse createProduct(ProductManagementRequest request) { String sku = request.sku().trim(); if (products.existsBySkuIgnoreCase(sku)) throw conflict("A product with this SKU already exists"); Product product = new Product(); product.setCreatedAt(OffsetDateTime.now()); applyProduct(product, request); return product(products.save(product)); }
 
     @Transactional
-    public ProductManagementResponse updateProduct(UUID id, ProductManagementRequest request) { Product product = products.findById(id).orElseThrow(() -> notFound("Product")); applyProduct(product, request); return product(products.save(product)); }
+    public ProductManagementResponse updateProduct(UUID id, ProductManagementRequest request) { Product product = products.findById(id).orElseThrow(() -> notFound("Product")); if (products.existsBySkuIgnoreCaseAndIdNot(request.sku().trim(), id)) throw conflict("A product with this SKU already exists"); applyProduct(product, request); return product(products.save(product)); }
 
     @Transactional(readOnly = true)
     public List<InventoryResponse> inventory(UUID branchId) { requiredBranch(branchId); return inventory.findForBranch(branchId).stream().map(this::inventory).toList(); }
@@ -450,7 +452,7 @@ public class ManagementService {
         }
     }
 
-    private void applyBranch(Branch branch, BranchRequest request) { branch.setCode(request.code().trim().toUpperCase(Locale.ROOT)); branch.setName(request.name().trim()); branch.setAddressLine1(request.address().trim()); branch.setDistrict(request.district().trim()); branch.setProvince(blankToNull(request.province())); branch.setPostalCode(blankToNull(request.postalCode())); branch.setPhone(blankToNull(request.phone())); branch.setStatus(enumValue(Branch.BranchStatus.class, request.status(), "Branch status")); branch.setAllowReservations(request.allowReservations()); }
+    private void applyBranch(Branch branch, BranchRequest request) { branch.setCode(request.code().trim().toUpperCase(Locale.ROOT)); branch.setName(request.name().trim()); branch.setAddressLine1(request.address().trim()); branch.setDistrict(request.district().trim()); branch.setProvince(blankToNull(request.province())); branch.setPostalCode(blankToNull(request.postalCode())); branch.setPhone(PhoneNumbers.normalize(request.phone())); branch.setStatus(enumValue(Branch.BranchStatus.class, request.status(), "Branch status")); branch.setAllowReservations(request.allowReservations()); branch.setUpdatedAt(OffsetDateTime.now()); }
     private void applyProduct(Product product, ProductManagementRequest request) { if (request.maxPlayers() < request.minPlayers()) throw badRequest("Maximum players must be at least minimum players"); if (request.salePrice() != null && request.salePrice().compareTo(request.basePrice()) > 0) throw badRequest("Sale price cannot exceed base price"); product.setSku(request.sku().trim().toUpperCase(Locale.ROOT)); product.setName(request.name().trim()); product.setCategory(categories.findById(request.categoryId()).orElseThrow(() -> notFound("Product category"))); product.setBasePrice(request.basePrice()); product.setSalePrice(request.salePrice()); product.setMinPlayers(request.minPlayers()); product.setMaxPlayers(request.maxPlayers()); product.setMinPlayTimeMinutes(request.minPlayTimeMinutes()); product.setMaxPlayTimeMinutes(request.maxPlayTimeMinutes()); product.setMinAge(request.minAge()); product.setDifficulty(enumValue(Product.ProductDifficulty.class, request.difficulty(), "Product difficulty")); product.setDescription(blankToNull(request.description())); product.setActive(request.active()); product.setUpdatedAt(OffsetDateTime.now()); }
     private void assignRole(User user, String code, UUID assignedBy, OffsetDateTime now) { Role role = roles.findByCodeAndIsActiveTrue(code).orElseThrow(() -> new IllegalStateException("Required role is not configured")); UserRole userRole = new UserRole(); userRole.setId(new UserRoleId(user.getId(), role.getId())); userRole.setUser(user); userRole.setRole(role); userRole.setAssignedAt(now); userRole.setAssignedBy(assignedBy); userRoles.save(userRole); }
     private void replaceAssignments(User user, List<UUID> branchIds, UUID primaryBranchId, UUID assignedBy, OffsetDateTime now) { assignments.deleteAllByUserId(user.getId()); for (UUID branchId : new LinkedHashSet<>(branchIds)) { StaffBranchAssignment assignment = new StaffBranchAssignment(); assignment.setId(new StaffBranchAssignmentId(user.getId(), branchId)); assignment.setUser(user); assignment.setBranch(requiredBranch(branchId)); assignment.setAssignedAt(now); assignment.setAssignedBy(assignedBy); assignment.setPrimary(branchId.equals(primaryBranchId)); assignments.save(assignment); } }

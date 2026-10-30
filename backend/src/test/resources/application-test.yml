@@ -1,0 +1,10 @@
+spring:
+  jpa:
+    show-sql: false
+
+jwt:
+  secret: boardly-test-only-jwt-secret-at-least-32-characters
+
+boardly:
+  auth:
+    dev-reset-token-exposure: false

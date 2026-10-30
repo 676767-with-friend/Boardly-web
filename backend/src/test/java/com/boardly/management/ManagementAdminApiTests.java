@@ -4,6 +4,7 @@ import com.boardly.branch.BranchOperatingHour;
 import com.boardly.branch.BranchOperatingHourRepository;
 import com.boardly.branch.BranchRepository;
 import com.boardly.branch.TableZoneRepository;
+import com.boardly.product.ProductRepository;
 import com.boardly.user.Role;
 import com.boardly.user.RoleRepository;
 import com.boardly.user.StaffBranchAssignment;
@@ -75,6 +76,7 @@ class ManagementAdminApiTests {
     @Autowired UserRoleRepository userRoles;
     @Autowired StaffBranchAssignmentRepository assignments;
     @Autowired BranchRepository branches;
+    @Autowired ProductRepository products;
     @Autowired PasswordEncoder passwordEncoder;
     @Autowired TableZoneRepository zones;
     @Autowired BranchOperatingHourRepository operatingHours;
@@ -222,6 +224,9 @@ class ManagementAdminApiTests {
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
         putAs(admin.token(), url, updateStaffBody("active", List.of(), CENTRAL, null))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        putAs(admin.token(), url,
+                updateStaffBody("active", List.of(CENTRAL), CENTRAL, null).replace("0899999999", "invalid-phone"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
         putAs(admin.token(), "/api/admin/staff/" + customer.id(), updateStaffBody("active", List.of(CENTRAL), CENTRAL, null))
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("NOT_FOUND"));
         putAs(admin.token(), "/api/admin/staff/" + UUID.randomUUID(), updateStaffBody("active", List.of(CENTRAL), CENTRAL, null))
@@ -250,6 +255,9 @@ class ManagementAdminApiTests {
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
         postAs(admin.token(), "/api/admin/staff", createStaffBody("not-an-email", List.of(CENTRAL), CENTRAL, "ManagedStaffPassword!"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        postAs(admin.token(), "/api/admin/staff",
+                createStaffBody(fresh, List.of(CENTRAL), CENTRAL, "ManagedStaffPassword!").replace("0810000000", "invalid-phone"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
         postAs(admin.token(), "/api/admin/staff", createStaffBody(fresh, List.of(), CENTRAL, "ManagedStaffPassword!"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
         assertTrue(users.findByEmailIgnoreCase(fresh).isEmpty());
@@ -267,6 +275,7 @@ class ManagementAdminApiTests {
     @Test
     void adminCanListAndUpdateBranches() throws Exception {
         Account admin = account("admin", null);
+        OffsetDateTime updatedBefore = branches.findById(SILOM).orElseThrow().getUpdatedAt();
         JsonNode list = body(getAs(admin.token(), "/api/admin/branches").andExpect(status().isOk()));
         assertNotNull(find(list, "id", CENTRAL.toString()));
         JsonNode silom = find(list, "id", SILOM.toString());
@@ -278,24 +287,30 @@ class ManagementAdminApiTests {
                 .andExpect(jsonPath("$.name").value("Renamed Silom Branch"))
                 .andExpect(jsonPath("$.status").value("inactive"))
                 .andExpect(jsonPath("$.allowReservations").value(false));
+        assertFalse(branches.findById(SILOM).orElseThrow().getUpdatedAt().isBefore(updatedBefore));
     }
 
-    // KNOWN BUG (test disabled, re-enable once fixed): ManagementService.createBranch() never sets createdAt/updatedAt, so POST /api/admin/branches fails with 500 (null value in column created_at).
-    // @Test
-    // void adminCanCreateBranch() throws Exception {
-    //     Account admin = account("admin", null);
-    //     String code = ("TB" + UUID.randomUUID().toString().replace("-", "")).substring(0, 12);
-    //     JsonNode created = body(postAs(admin.token(), "/api/admin/branches",
-    //             branchBody(code, "Test Branch", "active", true))
-    //             .andExpect(status().isOk())
-    //             .andExpect(jsonPath("$.name").value("Test Branch"))
-    //             .andExpect(jsonPath("$.status").value("active"))
-    //             .andExpect(jsonPath("$.allowReservations").value(true))
-    //             .andExpect(jsonPath("$.tableCount").value(0))
-    //             .andExpect(jsonPath("$.staffCount").value(0)));
-    //     assertNotNull(find(body(getAs(admin.token(), "/api/admin/branches").andExpect(status().isOk())),
-    //             "id", created.path("id").asText()));
-    // }
+    @Test
+    void adminCanCreateBranch() throws Exception {
+        Account admin = account("admin", null);
+        String code = ("TB" + UUID.randomUUID().toString().replace("-", "")).substring(0, 12);
+        JsonNode created = body(postAs(admin.token(), "/api/admin/branches",
+                branchBody(code, "Test Branch", "active", true))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Test Branch"))
+                .andExpect(jsonPath("$.status").value("active"))
+                .andExpect(jsonPath("$.allowReservations").value(true))
+                .andExpect(jsonPath("$.tableCount").value(0))
+                .andExpect(jsonPath("$.staffCount").value(0)));
+        UUID id = UUID.fromString(created.path("id").asText());
+        assertNotNull(find(body(getAs(admin.token(), "/api/admin/branches").andExpect(status().isOk())),
+                "id", id.toString()));
+        assertNotNull(branches.findById(id).orElseThrow().getCreatedAt());
+        assertNotNull(branches.findById(id).orElseThrow().getUpdatedAt());
+        postAs(admin.token(), "/api/admin/branches", branchBody(code.toLowerCase(), "Duplicate", "active", true))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CONFLICT"));
+        assertEquals(1, branches.findAll().stream().filter(branch -> branch.getCode().equalsIgnoreCase(code)).count());
+    }
 
     @Test
     void branchEndpointsValidateInputAndRestrictAccess() throws Exception {
@@ -310,6 +325,9 @@ class ManagementAdminApiTests {
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
         postAs(admin.token(), "/api/admin/branches", branchBody("X".repeat(31), "Long Code", "active", true))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        postAs(admin.token(), "/api/admin/branches",
+                branchBody(code, "Invalid Phone", "active", true).replace("02-000-0000", "invalid-phone"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
         putAs(admin.token(), "/api/admin/branches/" + UUID.randomUUID(), branchBody(code, "Ghost", "active", true))
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("NOT_FOUND"));
 
@@ -323,6 +341,7 @@ class ManagementAdminApiTests {
     @Test
     void adminCanListAndUpdateProducts() throws Exception {
         Account admin = account("admin", null);
+        OffsetDateTime updatedBefore = products.findById(WINGSPAN).orElseThrow().getUpdatedAt();
         JsonNode list = body(getAs(admin.token(), "/api/admin/products").andExpect(status().isOk()));
         JsonNode wingspan = find(list, "id", WINGSPAN.toString());
         assertNotNull(wingspan);
@@ -333,24 +352,31 @@ class ManagementAdminApiTests {
                 .andExpect(jsonPath("$.name").value("Wingspan Renamed"))
                 .andExpect(jsonPath("$.maxPlayers").value(5))
                 .andExpect(jsonPath("$.difficulty").value("easy"));
+        assertFalse(products.findById(WINGSPAN).orElseThrow().getUpdatedAt().isBefore(updatedBefore));
     }
 
-    // KNOWN BUG (test disabled, re-enable once fixed): ManagementService.createProduct() never sets createdAt, so POST /api/admin/products fails with 500 (null value in column created_at).
-    // @Test
-    // void adminCanCreateProduct() throws Exception {
-    //     Account admin = account("admin", null);
-    //     String sku = "mgmt-" + UUID.randomUUID().toString().substring(0, 8);
-    //     JsonNode created = body(postAs(admin.token(), "/api/admin/products",
-    //             productBody(sku, "Mgmt Test Game", STRATEGY, 1000, 800, 2, 4, "medium"))
-    //             .andExpect(status().isOk())
-    //             .andExpect(jsonPath("$.sku").value(sku.toUpperCase()))
-    //             .andExpect(jsonPath("$.name").value("Mgmt Test Game"))
-    //             .andExpect(jsonPath("$.categoryName").value("Strategy"))
-    //             .andExpect(jsonPath("$.difficulty").value("medium"))
-    //             .andExpect(jsonPath("$.stock").value(0)));
-    //     assertNotNull(find(body(getAs(admin.token(), "/api/admin/products").andExpect(status().isOk())),
-    //             "id", created.path("id").asText()));
-    // }
+    @Test
+    void adminCanCreateProduct() throws Exception {
+        Account admin = account("admin", null);
+        String sku = "mgmt-" + UUID.randomUUID().toString().substring(0, 8);
+        JsonNode created = body(postAs(admin.token(), "/api/admin/products",
+                productBody(sku, "Mgmt Test Game", STRATEGY, 1000, 800, 2, 4, "medium"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sku").value(sku.toUpperCase()))
+                .andExpect(jsonPath("$.name").value("Mgmt Test Game"))
+                .andExpect(jsonPath("$.categoryName").value("Strategy"))
+                .andExpect(jsonPath("$.difficulty").value("medium"))
+                .andExpect(jsonPath("$.stock").value(0)));
+        UUID id = UUID.fromString(created.path("id").asText());
+        assertNotNull(find(body(getAs(admin.token(), "/api/admin/products").andExpect(status().isOk())),
+                "id", id.toString()));
+        assertNotNull(products.findById(id).orElseThrow().getCreatedAt());
+        assertNotNull(products.findById(id).orElseThrow().getUpdatedAt());
+        postAs(admin.token(), "/api/admin/products",
+                productBody(sku.toUpperCase(), "Duplicate", STRATEGY, 1000, null, 2, 4, "medium"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CONFLICT"));
+        assertEquals(1, products.findAll().stream().filter(product -> product.getSku().equalsIgnoreCase(sku)).count());
+    }
 
     @Test
     void productEndpointsEnforceBusinessRulesAndAccess() throws Exception {

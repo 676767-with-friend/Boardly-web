@@ -50,11 +50,16 @@ export interface LiveTable {
   players: number | null
   reservationStartsAt: string | null
   reservationEndsAt: string | null
+  nextReservationNumber: string | null
+  nextReservationStartsAt: string | null
+  nextReservationEndsAt: string | null
   checkInAt: string | null
   serverTime: string
   bookedDurationMinutes: number | null
   elapsedSeconds: number
   overtimeSeconds: number
+  baseFee: number | null
+  overtimeFee: number | null
   runningFee: number | null
 }
 
@@ -84,9 +89,12 @@ export interface CheckoutPreview {
   checkInAt: string
   checkOutAt: string | null
   serverTime: string
+  scheduledEndAt: string | null
   bookedDurationMinutes: number | null
   elapsedSeconds: number
   overtimeSeconds: number
+  baseFee: number
+  overtimeFee: number
   finalFee: number
   currency: string
 }

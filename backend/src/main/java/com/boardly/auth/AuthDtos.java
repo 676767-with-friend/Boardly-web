@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.UUID;
+import com.boardly.common.validation.PhoneNumbers;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 public final class AuthDtos {
@@ -18,7 +19,7 @@ public final class AuthDtos {
             @NotBlank(message = "Last name is required") @Size(max = 100) String lastName,
             @Size(max = 100) String displayName,
             @NotBlank(message = "Email is required") @Email(message = "Enter a valid email address") @Size(max = 255) String email,
-            @Size(max = 30) String phone,
+            @Pattern(regexp = PhoneNumbers.OPTIONAL_PATTERN, message = PhoneNumbers.MESSAGE) @Size(max = 30) String phone,
             @NotBlank(message = "Password is required") @Size(min = 12, max = 128, message = "Password must be 12 to 128 characters") String password,
             @NotNull(message = "Terms acceptance is required") Boolean acceptTerms,
             @NotNull(message = "Privacy acceptance is required") Boolean acceptPrivacy) {

@@ -1,5 +1,7 @@
 package com.boardly.auth;
 
+import com.boardly.common.validation.PhoneNumbers;
+
 import com.boardly.auth.AuthDtos.AuthResponse;
 import com.boardly.auth.AuthDtos.ForgotPasswordResponse;
 import com.boardly.auth.AuthDtos.ForgotPasswordRequest;
@@ -103,7 +105,7 @@ public class AuthService implements EnvironmentAware {
         user.setLastName(request.lastName().trim());
         user.setDisplayName(blankToNull(request.displayName()));
         user.setEmail(email);
-        user.setPhone(blankToNull(request.phone()));
+        user.setPhone(PhoneNumbers.normalize(request.phone()));
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setStatus(User.UserStatus.active);
         user.setCreatedAt(now);
