@@ -1,5 +1,7 @@
 package com.boardly.reservation;
 
+import com.boardly.common.validation.PhoneNumbers;
+
 import com.boardly.auth.AuthUser;
 import com.boardly.branch.*;
 import com.boardly.common.exception.BoardlyException;
@@ -7,6 +9,7 @@ import com.boardly.notification.ReservationNotificationService;
 import com.boardly.user.*;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -36,12 +39,14 @@ public class ReservationService {
     private final UserRepository users;
     private final StaffBranchAssignmentRepository assignments;
     private final ReservationNotificationService notifications;
+    private final Clock clock;
 
     public ReservationService(BranchRepository branches, StoreTableRepository tables,
             BranchOperatingHourRepository hours, BookingBlackoutRepository blackouts,
             BranchPricingRuleRepository pricing, ReservationRepository reservations,
             PlaySessionRepository sessions, UserRepository users,
-            StaffBranchAssignmentRepository assignments, ReservationNotificationService notifications) {
+            StaffBranchAssignmentRepository assignments, ReservationNotificationService notifications,
+            Clock clock) {
         this.branches = branches;
         this.tables = tables;
         this.hours = hours;
@@ -52,6 +57,7 @@ public class ReservationService {
         this.users = users;
         this.assignments = assignments;
         this.notifications = notifications;
+        this.clock = clock;
     }
 
     @Transactional(readOnly = true)
@@ -91,7 +97,7 @@ public class ReservationService {
         reservation.setTable(table);
         reservation.setPricingRule(rule);
         reservation.setContactName(request.contactName().trim());
-        reservation.setContactPhone(request.contactPhone());
+        reservation.setContactPhone(PhoneNumbers.normalize(request.contactPhone()));
         reservation.setContactEmail(request.contactEmail());
         reservation.setStartsAt(request.startsAt());
         reservation.setEndsAt(request.endsAt());
@@ -154,9 +160,13 @@ public class ReservationService {
     @Transactional
     public ReservationDtos.LiveTableResponse checkIn(AuthUser auth, UUID id) {
         requireStaffOperator(auth);
-        Reservation reservation = reservations.findById(id)
+        Reservation reservation = reservations.findByIdForUpdate(id)
                 .orElseThrow(() -> notFound("Reservation not found"));
         authorizeBranch(auth, reservation.getBranch().getId());
+        if (reservation.getStatus() == Reservation.ReservationStatus.checked_in) {
+            throw new BoardlyException("This reservation is already checked in.", 409,
+                    "RESERVATION_ALREADY_CHECKED_IN");
+        }
         OffsetDateTime now = now();
         CheckInEligibility checkIn = checkInEligibility(reservation, now);
         if (!checkIn.eligible()) throw bad(checkIn.reason(), "RESERVATION_NOT_CHECKIN_READY");
@@ -211,7 +221,7 @@ public class ReservationService {
         session.setUser(request.userId() == null ? null : users.findById(request.userId())
                 .orElseThrow(() -> bad("Customer not found", "USER_NOT_FOUND")));
         session.setGuestName(trimToNull(request.guestName()));
-        session.setGuestPhone(trimToNull(request.guestPhone()));
+        session.setGuestPhone(PhoneNumbers.normalize(request.guestPhone()));
         session.setGuestEmail(trimToNull(request.guestEmail()));
         session.setPlayerCount(request.playerCount());
         session.setPricingRule(activeRule(request.branchId(), now));
@@ -227,7 +237,7 @@ public class ReservationService {
     @Transactional(readOnly = true)
     public ReservationDtos.CheckoutResponse checkoutPreview(AuthUser auth, UUID id) {
         requireStaffOperator(auth);
-        PlaySession session = activeSession(auth, id);
+        PlaySession session = activeSession(auth, id, false);
         return checkoutResponse(session, now(), false);
     }
 
@@ -238,16 +248,17 @@ public class ReservationService {
         if (request == null || !request.paymentReceived()) {
             throw bad("Confirm payment received before checkout.", "PAYMENT_CONFIRMATION_REQUIRED");
         }
-        PlaySession session = activeSession(auth, id);
+        PlaySession session = activeSession(auth, id, true);
         OffsetDateTime checkoutAt = now();
+        SessionPricing.Charge charge = SessionPricing.calculate(session, checkoutAt);
         session.setCheckOutAt(checkoutAt);
         session.setStatus(PlaySession.PlaySessionStatus.completed);
         session.setClosedBy(auth.id());
-        session.setFinalFee(sessionFee(session, checkoutAt));
+        session.setFinalFee(charge.finalFee());
         if (session.getReservation() != null) {
             session.getReservation().setStatus(Reservation.ReservationStatus.completed);
         }
-        return checkoutResponse(session, checkoutAt, true);
+        return checkoutResponse(session, checkoutAt, true, charge);
     }
 
     @Transactional(readOnly = true)
@@ -262,18 +273,23 @@ public class ReservationService {
                 .collect(Collectors.toMap(session -> session.getTable().getId(), session -> session));
         return tables.findByBranchIdOrderBySortOrderAsc(branchId).stream().map(table -> {
             PlaySession session = active.get(table.getId());
-            Reservation reservation = operationalReservation(table.getId(), now, dayEnd);
+            Reservation currentReservation = currentReservation(table.getId(), now);
+            Reservation upcomingReservation = operationalReservation(table.getId(), now, dayEnd);
+            Reservation contextReservation = session != null && session.getReservation() != null
+                    ? session.getReservation() : currentReservation;
+            Reservation nextReservation = nextReservation(table.getId(), now, dayEnd, contextReservation);
             String state = !table.isActive()
                     || table.getOperationalStatus() == StoreTable.OperationalStatus.unavailable
                             ? "unavailable"
-                            : session != null ? "occupied" : reservation != null ? "reserved" : "available";
-            return live(table, session, reservation, state,
-                    eligibility(table, now, end, players, window, session, reservation), now);
+                            : session != null ? "occupied" : currentReservation != null ? "reserved" : "available";
+            return live(table, session, currentReservation, nextReservation, state,
+                    eligibility(table, now, end, players, window, session, upcomingReservation), now);
         }).toList();
     }
 
-    private PlaySession activeSession(AuthUser auth, UUID id) {
-        PlaySession session = sessions.findById(id).orElseThrow(() -> notFound("Session not found"));
+    private PlaySession activeSession(AuthUser auth, UUID id, boolean forUpdate) {
+        PlaySession session = (forUpdate ? sessions.findByIdForUpdate(id) : sessions.findById(id))
+                .orElseThrow(() -> notFound("Session not found"));
         authorizeBranch(auth, session.getBranch().getId());
         if (session.getStatus() != PlaySession.PlaySessionStatus.active) {
             throw bad("Session is not active.", "SESSION_NOT_ACTIVE");
@@ -331,7 +347,9 @@ public class ReservationService {
         if (!table.isActive() || table.getOperationalStatus() != StoreTable.OperationalStatus.available) {
             return blocked("OPERATIONALLY_UNAVAILABLE", "Table is inactive or unavailable.");
         }
-        if (session != null) return blocked("ACTIVE_SESSION", "An active play session is using this table.");
+        if (sessionConflicts(session, start, end)) {
+            return blocked("ACTIVE_SESSION", "An active play session is using this table.");
+        }
         if (reservation != null) {
             return blocked("RESERVATION_CONFLICT", "Reserved "
                     + reservation.getStartsAt().format(DateTimeFormatter.ofPattern("HH:mm")) + "-"
@@ -356,6 +374,26 @@ public class ReservationService {
         return reservations
                 .findFirstByTableIdAndStatusInAndEndsAtGreaterThanAndStartsAtLessThanOrderByStartsAtAsc(
                         tableId, BOOKED_STATUSES, now, dayEnd).orElse(null);
+    }
+
+    private Reservation currentReservation(UUID tableId, OffsetDateTime now) {
+        return reservations
+                .findFirstByTableIdAndStatusInAndStartsAtLessThanEqualAndEndsAtGreaterThanOrderByStartsAtAsc(
+                        tableId, BOOKED_STATUSES, now, now).orElse(null);
+    }
+
+    private Reservation nextReservation(UUID tableId, OffsetDateTime now, OffsetDateTime dayEnd,
+            Reservation context) {
+        return reservations.findConflicts(tableId, now, dayEnd).stream()
+                .filter(item -> context == null || !item.getId().equals(context.getId()))
+                .findFirst().orElse(null);
+    }
+
+    private boolean sessionConflicts(PlaySession session, OffsetDateTime start, OffsetDateTime end) {
+        if (session == null) return false;
+        Reservation reservation = session.getReservation();
+        if (reservation == null || !now().isBefore(reservation.getEndsAt())) return true;
+        return session.getCheckInAt().isBefore(end) && reservation.getEndsAt().isAfter(start);
     }
 
     private void validateWindow(UUID branchId, OffsetDateTime start, OffsetDateTime end, short players) {
@@ -396,15 +434,18 @@ public class ReservationService {
 
     private ReservationDtos.LiveTableResponse live(StoreTable table, PlaySession session,
             Reservation reservation, String state, AssignmentEligibility assignment, OffsetDateTime now) {
+        return live(table, session, reservation, null, state, assignment, now);
+    }
+
+    private ReservationDtos.LiveTableResponse live(StoreTable table, PlaySession session,
+            Reservation reservation, Reservation nextReservation, String state,
+            AssignmentEligibility assignment, OffsetDateTime now) {
         Reservation sessionReservation = session == null ? null : session.getReservation();
         Reservation contextReservation = sessionReservation != null ? sessionReservation : reservation;
         String client = session != null
                 ? session.getUser() != null ? fullName(session.getUser()) : session.getGuestName()
                 : reservation == null ? null : reservation.getContactName();
-        long elapsed = session == null ? 0 : Math.max(0, Duration.between(session.getCheckInAt(), now).getSeconds());
-        int bookedMinutes = bookedDurationMinutes(session);
-        long overtime = bookedMinutes == 0 ? 0 : Math.max(0, elapsed - bookedMinutes * 60L);
-        BigDecimal running = session == null ? null : sessionFee(session, now);
+        SessionPricing.Charge charge = session == null ? null : SessionPricing.calculate(session, now);
         return new ReservationDtos.LiveTableResponse(table.getId(), table.getCode(), table.getZone().getName(),
                 table.getMinPlayers(), table.getMaxPlayers(), state, assignment.assignable(), assignment.code(),
                 assignment.reason(), session == null ? null : session.getId(),
@@ -414,37 +455,32 @@ public class ReservationService {
                         : reservation == null ? null : reservation.getPlayerCount(),
                 contextReservation == null ? null : contextReservation.getStartsAt(),
                 contextReservation == null ? null : contextReservation.getEndsAt(),
+                nextReservation == null ? null : nextReservation.getReservationNumber(),
+                nextReservation == null ? null : nextReservation.getStartsAt(),
+                nextReservation == null ? null : nextReservation.getEndsAt(),
                 session == null ? null : session.getCheckInAt(), now,
-                bookedMinutes == 0 ? null : bookedMinutes, elapsed, overtime, running);
+                charge == null || charge.bookedDurationMinutes() == 0 ? null : charge.bookedDurationMinutes(),
+                charge == null ? 0 : charge.elapsedSeconds(), charge == null ? 0 : charge.overtimeSeconds(),
+                charge == null ? null : charge.baseFee(), charge == null ? null : charge.overtimeFee(),
+                charge == null ? null : charge.finalFee());
     }
 
     private ReservationDtos.CheckoutResponse checkoutResponse(PlaySession session, OffsetDateTime at,
             boolean completed) {
-        long elapsed = Math.max(0, Duration.between(session.getCheckInAt(), at).getSeconds());
-        int bookedMinutes = bookedDurationMinutes(session);
-        long overtime = bookedMinutes == 0 ? 0 : Math.max(0, elapsed - bookedMinutes * 60L);
+        return checkoutResponse(session, at, completed, SessionPricing.calculate(session, at));
+    }
+
+    private ReservationDtos.CheckoutResponse checkoutResponse(PlaySession session, OffsetDateTime at,
+            boolean completed, SessionPricing.Charge charge) {
         return new ReservationDtos.CheckoutResponse(session.getId(),
                 completed ? PlaySession.PlaySessionStatus.completed.name() : session.getStatus().name(),
                 session.getUser() != null ? fullName(session.getUser()) : session.getGuestName(),
                 session.getTable().getCode(), session.getCheckInAt(), completed ? at : null, at,
-                bookedMinutes == 0 ? null : bookedMinutes, elapsed, overtime,
-                completed ? session.getFinalFee() : sessionFee(session, at),
+                session.getReservation() == null ? null : session.getReservation().getEndsAt(),
+                charge.bookedDurationMinutes() == 0 ? null : charge.bookedDurationMinutes(),
+                charge.elapsedSeconds(), charge.overtimeSeconds(), charge.baseFee(), charge.overtimeFee(),
+                completed ? session.getFinalFee() : charge.finalFee(),
                 session.getPricingRule().getCurrency());
-    }
-
-    private int bookedDurationMinutes(PlaySession session) {
-        if (session == null || session.getReservation() == null) return 0;
-        return Math.toIntExact(Math.max(1, Duration.between(session.getReservation().getStartsAt(),
-                session.getReservation().getEndsAt()).toMinutes()));
-    }
-
-    private BigDecimal sessionFee(PlaySession session, OffsetDateTime at) {
-        long elapsedSeconds = Math.max(1, Duration.between(session.getCheckInAt(), at).getSeconds());
-        long bookedSeconds = session.getReservation() == null ? 0
-                : Math.max(1, Duration.between(session.getReservation().getStartsAt(),
-                        session.getReservation().getEndsAt()).getSeconds());
-        return feeForBlocks(session.getPricingRule(), session.getPlayerCount(),
-                billableBlocks(Math.max(elapsedSeconds, bookedSeconds)));
     }
 
     private long billableBlocks(long seconds) {
@@ -480,7 +516,7 @@ public class ReservationService {
     }
 
     private OffsetDateTime now() {
-        return OffsetDateTime.now(STORE_ZONE);
+        return OffsetDateTime.now(clock).atZoneSameInstant(STORE_ZONE).toOffsetDateTime();
     }
 
     private AssignmentEligibility blocked(String code, String reason) {

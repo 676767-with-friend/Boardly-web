@@ -1,13 +1,11 @@
-# .github/workflows/ci.yml
 name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
-# ยกเลิก run เก่าของ branch เดียวกันเมื่อมี push ใหม่
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -18,22 +16,40 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.3
+          run_install: false
       - uses: actions/setup-node@v4
         with:
-          node-version: 22 # vitest 5 / jsdom 30 ต้องการ Node >= 22.12 (Dockerfile ก็ใช้ 22)
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
       - name: Install
         working-directory: frontend
-        run: npm ci
+        run: pnpm install --frozen-lockfile
         env:
-          CYPRESS_INSTALL_BINARY: 0 # job นี้ไม่รัน Cypress ไม่ต้องโหลด binary
+          CYPRESS_INSTALL_BINARY: 0
       - name: Build
         working-directory: frontend
-        run: npm run build
-      - name: Unit test (Vitest)
+        run: pnpm build
+      - name: Unit tests with coverage
         working-directory: frontend
-        run: npm test # ไม่ใช้ --if-present: ถ้าไม่มี script "test" ต้อง fail ไม่ใช่เงียบ ๆ ข้าม
+        run: pnpm test:coverage
+      - name: Upload frontend test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-test-reports
+          path: frontend/reports
+          if-no-files-found: ignore
+      - name: Upload frontend coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: frontend/coverage
+          if-no-files-found: ignore
 
   backend:
     name: Backend (mvn verify)
@@ -42,37 +58,52 @@ jobs:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_USER: boardly
-          POSTGRES_PASSWORD: boardly
-          POSTGRES_DB: boardly_db
+          POSTGRES_USER: boardly_test
+          POSTGRES_PASSWORD: boardly_test
+          POSTGRES_DB: boardly_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U boardly -d boardly_db"
+          --health-cmd "pg_isready -U boardly_test -d boardly_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
     env:
-      DB_URL: jdbc:postgresql://localhost:5432/boardly_db
-      DB_USERNAME: boardly
-      DB_PASSWORD: boardly
-      JWT_SECRET: github-actions-ci-jwt-secret-at-least-32-characters
+      SPRING_PROFILES_ACTIVE: test
+      DB_URL: jdbc:postgresql://localhost:5432/boardly_test
+      DB_USERNAME: boardly_test
+      DB_PASSWORD: boardly_test
+      JWT_SECRET: boardly-ci-test-jwt-secret-at-least-32-characters
     steps:
       - uses: actions/checkout@v4
-      - name: Init database
+      - name: Initialize test database
         env:
-          PGPASSWORD: boardly
+          PGPASSWORD: boardly_test
         run: |
-          psql -h localhost -U boardly -d boardly_db -v ON_ERROR_STOP=1 -f database/Boardly_schema.sql
-          psql -h localhost -U boardly -d boardly_db -v ON_ERROR_STOP=1 -f database/seed-dev.sql
+          psql -h localhost -U boardly_test -d boardly_test -v ON_ERROR_STOP=1 -f database/Boardly_schema.sql
+          psql -h localhost -U boardly_test -d boardly_test -v ON_ERROR_STOP=1 -f database/seed-dev.sql
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: "21"
           cache: maven
-      - name: Build & test
+      - name: Build and test
         working-directory: backend
-        run: mvn -B verify
+        run: mvn -B clean verify
+      - name: Upload backend test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-reports
+          path: backend/target/surefire-reports
+          if-no-files-found: ignore
+      - name: Upload backend coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/target/site/jacoco
+          if-no-files-found: ignore
 
   e2e:
     name: E2E (Cypress)
@@ -81,28 +112,30 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-
-      # db + backend + frontend ตาม compose.yaml (schema + seed-dev.sql ถูกโหลดตอน db เริ่ม)
-      # --wait รอจน healthcheck ของทุก service ผ่าน
       - name: Start stack
         run: docker compose up -d --build --wait --wait-timeout 300
-
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.3
+          run_install: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
       - uses: actions/cache@v4
         with:
           path: ~/.cache/Cypress
-          key: cypress-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
+          key: cypress-${{ runner.os }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}
       - name: Install
         working-directory: frontend
-        run: npm ci
+        run: pnpm install --frozen-lockfile
+      - name: Install Cypress binary
+        working-directory: frontend
+        run: pnpm exec cypress install
       - name: Run Cypress
         working-directory: frontend
-        run: npx cypress run # baseUrl ตั้งไว้ใน cypress.config.ts (http://localhost:8443)
-
+        run: pnpm exec cypress run
       - name: Upload Cypress artifacts
         if: failure()
         uses: actions/upload-artifact@v4

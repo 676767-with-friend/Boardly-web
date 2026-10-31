@@ -12,7 +12,9 @@ import {
   type Reservation,
 } from "@/services/reservationsApi"
 import type { PublicBranch } from "@/types"
-import { formatPhone, isValidPhone } from "@/utils/phone"
+import { addCalendarDays, bangkokDateString } from "@/utils/bangkokDate"
+import { branchAddress } from "@/utils/branchLocation"
+import { thaiPhoneError } from "@/utils/phone"
 
 const BANGKOK_OFFSET = "+07:00"
 const inputClass =
@@ -48,6 +50,12 @@ function errorMessage(error: unknown, fallback: string) {
   return typeof error === "object" && error !== null && "message" in error
     ? String(error.message)
     : fallback
+}
+
+function errorCode(error: unknown) {
+  return typeof error === "object" && error !== null && "code" in error
+    ? String(error.code)
+    : null
 }
 
 function formatDateTime(value: string) {
@@ -133,7 +141,7 @@ export function ReservationPage() {
   )
   const [form, setForm] = useState({
     branchId: "",
-    date: new Date().toISOString().slice(0, 10),
+    date: bangkokDateString(),
     time: "12:00",
     duration: 2,
     players: 2,
@@ -157,24 +165,23 @@ export function ReservationPage() {
   }, [])
 
   const startsAt = useMemo(
-    () => localIso(form.date, form.time),
+    () => (form.date && form.time ? localIso(form.date, form.time) : ""),
     [form.date, form.time],
   )
   const endsAt = useMemo(
-    () => endIso(form.date, form.time, form.duration),
+    () =>
+      form.date && form.time
+        ? endIso(form.date, form.time, form.duration)
+        : "",
     [form.date, form.time, form.duration],
   )
   const branch = branches.find((item) => item.id === form.branchId)
-  const days = useMemo(
-    () =>
-      Array.from({ length: 14 }, (_, index) => {
-        const day = new Date()
-        day.setHours(0, 0, 0, 0)
-        day.setDate(day.getDate() + index)
-        return day
-      }),
-    [],
-  )
+  const days = useMemo(() => {
+    const today = bangkokDateString()
+    return Array.from({ length: 14 }, (_, index) =>
+      addCalendarDays(today, index),
+    )
+  }, [])
 
   const invalidateTable = <K extends keyof typeof form,>(
     key: K,
@@ -206,6 +213,8 @@ export function ReservationPage() {
       !form.contactEmail.trim()
     )
       return setError("Enter players, reservation name, and email to continue.")
+    const phoneValidationError = thaiPhoneError(form.contactPhone)
+    if (phoneValidationError) return setError(phoneValidationError)
     setSearching(true)
     setError(null)
     setSelectedTable(null)
@@ -232,15 +241,11 @@ export function ReservationPage() {
     setSubmitting(true)
     setError(null)
     try {
-      if (form.contactPhone && !isValidPhone(form.contactPhone)) {
-        setError("Enter a valid Thai phone number, for example 081-234-5678.")
-        return
-      }
       const reservation = await reservationsApi.create({
         branchId: form.branchId,
         tableId: selectedTable.id,
         contactName: form.contactName,
-        contactPhone: form.contactPhone.replace(/\D/g, "") || undefined,
+        contactPhone: form.contactPhone || undefined,
         contactEmail: form.contactEmail || undefined,
         startsAt,
         endsAt,
@@ -248,6 +253,15 @@ export function ReservationPage() {
       })
       navigate(`/reservations/${reservation.reservationNumber}/confirmation`)
     } catch (next) {
+      if (
+        ["RESERVATION_CONFLICT", "ACTIVE_SESSION"].includes(
+          errorCode(next) ?? "",
+        )
+      ) {
+        setAvailability(null)
+        setSelectedTable(null)
+        setStep(3)
+      }
       setError(errorMessage(next, "Unable to create your reservation."))
     } finally {
       setSubmitting(false)
@@ -300,9 +314,7 @@ export function ReservationPage() {
                 {branch.name}
               </div>
               <div className="space-y-1 text-sm text-[#6E6E73]">
-                <div>
-                  {branch.address}, {branch.district}
-                </div>
+                <div>{branchAddress(branch)}</div>
                 <div>{branch.hours}</div>
                 <div>{branch.tableCount} tables</div>
               </div>
@@ -328,8 +340,8 @@ export function ReservationPage() {
             Choose a date, start time, and session duration.
           </p>
           <div className="mb-7 grid grid-cols-4 gap-2 sm:grid-cols-7">
-            {days.map((day) => {
-              const value = day.toISOString().slice(0, 10)
+            {days.map((value) => {
+              const day = new Date(`${value}T00:00:00${BANGKOK_OFFSET}`)
               const selected = form.date === value
               return (
                 <button
@@ -343,17 +355,26 @@ export function ReservationPage() {
                   }`}
                 >
                   <span className="text-xs text-[#6E6E73]">
-                    {day.toLocaleDateString("en", { weekday: "short" })}
+                    {day.toLocaleDateString("en", {
+                      weekday: "short",
+                      timeZone: "Asia/Bangkok",
+                    })}
                   </span>
                   <span
                     className={`mt-0.5 text-lg font-bold ${
                       selected ? "text-[#0071E3]" : "text-[#1D1D1F]"
                     }`}
                   >
-                    {day.getDate()}
+                    {day.toLocaleDateString("en", {
+                      day: "numeric",
+                      timeZone: "Asia/Bangkok",
+                    })}
                   </span>
                   <span className="text-xs text-[#6E6E73]">
-                    {day.toLocaleDateString("en", { month: "short" })}
+                    {day.toLocaleDateString("en", {
+                      month: "short",
+                      timeZone: "Asia/Bangkok",
+                    })}
                   </span>
                 </button>
               )
@@ -456,7 +477,7 @@ export function ReservationPage() {
                     type="tel"
                     value={form.contactPhone}
                     onChange={(event) =>
-                      setForm({ ...form, contactPhone: formatPhone(event.target.value) })
+                      setForm({ ...form, contactPhone: event.target.value })
                     }
                     className={inputClass}
                   />
@@ -1083,9 +1104,7 @@ export function StaffLiveTablesApiPage() {
                           }
                           aria-disabled={!table.assignable}
                           className={`min-h-24 w-28 rounded-xl border-2 p-3 text-left transition-all hover:-translate-y-0.5 hover:shadow-md ${
-                            blocked
-                              ? "bg-amber-50 opacity-80"
-                              : style.bg
+                            blocked ? "bg-amber-50 opacity-80" : style.bg
                           } ${
                             active
                               ? "border-[#0071E3] ring-2 ring-[#0071E3]/20"
@@ -1337,6 +1356,8 @@ function WalkInModal({
   const [saving, setSaving] = useState(false)
   const submit = async () => {
     if (!form.guestName.trim()) return
+    const phoneValidationError = thaiPhoneError(form.guestPhone)
+    if (phoneValidationError) return onError(phoneValidationError)
     setSaving(true)
     try {
       await staffReservationsApi.walkIn({
@@ -1385,6 +1406,8 @@ function WalkInModal({
           </Field>
           <Field label="Phone">
             <input
+              type="tel"
+              autoComplete="tel"
               value={form.guestPhone}
               onChange={(event) =>
                 setForm({ ...form, guestPhone: event.target.value })
@@ -1538,7 +1561,7 @@ function SummaryRow({
     </div>
   )
 }
-function Legend({ color, label }: { color: string; label: string }) {
+function Legend({ color, label }: { color: string label: string }) {
   return (
     <div className="flex items-center gap-1.5">
       <span className={`h-2.5 w-2.5 rounded-full ${color}`} />

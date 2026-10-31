@@ -7,6 +7,8 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 
 @Repository
 public interface ReservationRepository extends JpaRepository<Reservation, UUID> {
@@ -17,6 +19,10 @@ public interface ReservationRepository extends JpaRepository<Reservation, UUID> 
             UUID branchId, OffsetDateTime startsAt, OffsetDateTime endsAt, List<Reservation.ReservationStatus> statuses);
     Optional<Reservation> findByReservationNumber(String reservationNumber);
     Optional<Reservation> findByReservationNumberAndUserId(String reservationNumber, UUID userId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select reservation from Reservation reservation where reservation.id = :id")
+    Optional<Reservation> findByIdForUpdate(UUID id);
     Optional<Reservation> findFirstByTableIdAndStatusInAndStartsAtLessThanEqualAndEndsAtGreaterThanOrderByStartsAtAsc(
             UUID tableId, List<Reservation.ReservationStatus> statuses, OffsetDateTime startsAt, OffsetDateTime endsAt);
     Optional<Reservation> findFirstByTableIdAndStatusInAndEndsAtGreaterThanAndStartsAtLessThanOrderByStartsAtAsc(

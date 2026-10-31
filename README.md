@@ -1,45 +1,52 @@
 # Boardly
 
-Boardly is a board-game shop and cafe: customers can shop and reserve tables, while staff manage live tables, sessions, reservations, orders, and checkout.
+Boardly is a full-stack board game store and cafe system. Customers can manage accounts, browse products, place pickup orders, and reserve tables. Staff handle walk-ins, check-ins, sessions, checkout, and inventory, while managers and administrators maintain tables, branches, products, users, and staff.
 
-## Run with Docker Compose
+## Technology Stack
 
-Requirements: Docker Desktop with Compose.
+- Frontend: React 19, TypeScript, Vite 8, and Tailwind CSS 4
+- Backend: Java 21, Spring Boot 3.3, Spring Security, Spring Data JPA, and Maven
+- Database: PostgreSQL 16
+- Testing: JUnit, Spring MockMvc, JaCoCo, Vitest, React Testing Library, and Cypress
+- Delivery: Docker Compose, GitHub Actions, Jenkins, and Kubernetes manifests
+
+## Prerequisites
+
+For the recommended setup, install Docker with Docker Compose.
+
+For manual development, also install Java 21, Maven 3.9+, Node.js 22, and pnpm 10.34.3. Kubernetes deployment additionally requires `kubectl`, Docker, and a disposable local cluster such as Minikube.
+
+## Quick Start
+
+From the repository root:
 
 ```powershell
 docker compose up --build
 ```
 
-Open <http://localhost:8443>. The backend is at <http://localhost:8080> and its health endpoint is <http://localhost:8080/api/health>.
+Open:
 
-Stop without deleting the database:
+- Application: `http://localhost:8443`
+- Backend health through Nginx: `http://localhost:8443/api/health`
+- Backend health directly: `http://localhost:8080/api/health`
+
+Stop the stack without deleting its database:
 
 ```powershell
 docker compose down
 ```
 
-To intentionally delete local development data, use `docker compose down -v`.
+Demo accounts are defined in `database/seed-dev.sql` and are intended only for isolated development environments.
 
-## Development accounts
+## Development Setup
 
-| Role | Email | Password |
-| --- | --- | --- |
-| Customer | `customer@boardly.com` | `customer` |
-| Staff | `staff@boardly.com` | `staff` |
-| Manager | `manager@boardly.com` | `manager` |
-| Admin | `admin@boardly.com` | `admin` |
-
-These accounts are for local development only.
-
-## Run locally
-
-Start PostgreSQL first:
+Start PostgreSQL:
 
 ```powershell
 docker compose up -d db
 ```
 
-Backend:
+Start the backend:
 
 ```powershell
 cd backend
@@ -47,64 +54,99 @@ $env:SPRING_PROFILES_ACTIVE="dev"
 $env:DB_URL="jdbc:postgresql://localhost:5433/boardly_db"
 $env:DB_USERNAME="boardly"
 $env:DB_PASSWORD="boardly"
-$env:JWT_SECRET="boardly-local-development-jwt-secret-at-least-32-characters"
+$env:JWT_SECRET="replace-with-at-least-32-development-characters"
 mvn spring-boot:run
 ```
 
-Frontend:
+In another terminal, start the frontend:
 
 ```powershell
 cd frontend
-pnpm install
-pnpm dev
+corepack pnpm install --frozen-lockfile
+corepack pnpm dev
 ```
 
-## Checks
+The frontend runs on `http://localhost:8443` and proxies `/api` to the backend on port `8080`.
+
+## Testing
+
+Backend tests require Java 21 and an isolated PostgreSQL 16 database initialized with `database/Boardly_schema.sql` and `database/seed-dev.sql`. Set `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, and a test-only `JWT_SECRET`, then run:
 
 ```powershell
-cd frontend; npm ci; npm run build; npm test
-cd ../backend; mvn -B verify
+cd backend
+mvn -B clean verify
 ```
 
-GitHub Actions runs the frontend checks, backend tests, and Cypress. Jenkins additionally builds/pushes both images and deploys the manifests in `k8s/` to Kubernetes on `main`.
+The JaCoCo report is written to `backend/target/site/jacoco/index.html`.
 
-## Backend tests and coverage
-
-The backend tests are integration tests that need PostgreSQL with the schema and dev seed loaded, which `compose.yaml` does automatically.
+Run the frontend checks with pinned pnpm:
 
 ```powershell
-docker compose up -d db
+cd frontend
+corepack pnpm install --frozen-lockfile
+corepack pnpm build
+corepack pnpm test
+corepack pnpm test:coverage
 ```
 
-Run the whole backend suite in a container (no local Java or Maven needed). Run it from the repository root; it joins the `boardly_default` network that Compose creates:
+The frontend coverage report is written to `frontend/coverage/index.html`.
+
+Run Cypress only after the complete Docker Compose stack is healthy:
 
 ```powershell
-docker run --rm --network boardly_default `
-  -v "${PWD}/backend:/app" -v boardly-m2:/root/.m2 -w /app `
-  -e DB_URL=jdbc:postgresql://db:5432/boardly_db `
-  -e DB_USERNAME=boardly -e DB_PASSWORD=boardly `
-  -e JWT_SECRET=local-test-jwt-secret-at-least-32-characters-long `
-  maven:3.9-eclipse-temurin-21-alpine mvn -B test
+cd frontend
+corepack pnpm exec cypress run
 ```
 
-Expected result: `BUILD SUCCESS` with no failing tests. The first run downloads dependencies and is slower; `boardly-m2` caches them for later runs.
+## CI/CD
 
-If Java 21 and Maven are installed locally, use the environment variables from "Run locally" (database on `localhost:5433`) and run `mvn -B test` in `backend/`.
+- `.github/workflows/ci.yml` builds and tests both applications and runs Cypress against Docker Compose. Local commands are verified; a current remote GitHub Actions run has not been verified.
+- `Jenkinsfile` builds, tests, publishes commit-tagged images, and deploys through an authorized Kubernetes context. A current remote Jenkins run has not been verified.
+- `backend/Dockerfile`, `frontend/Dockerfile`, and `compose.yaml` build the local application images and runtime stack.
 
-### Coverage report
+Do not treat local success as proof that remote credentials, registries, or deployment agents are configured correctly.
 
-JaCoCo records coverage while the tests run and writes a report afterwards. It is report-only: there is no minimum threshold, so it never fails the build.
+## Local Kubernetes Deployment
 
-Open this file in a web browser (not in a code editor, which shows the raw HTML):
+Use only the canonical manifests in `k8s/`. The manifests in `Tests/` are legacy artifacts and must not be applied alongside them.
 
-```text
-backend/target/site/jacoco/index.html
+First confirm that the active context is a disposable local cluster. Build and load local images:
+
+```powershell
+kubectl config current-context
+docker build -t boardly-backend:local ./backend
+docker build -t boardly-frontend:local -f frontend/Dockerfile .
+minikube image load boardly-backend:local boardly-frontend:local
 ```
 
-Click through package, class, method, then the source view. In the source view, green lines are covered, yellow lines have only some branches covered, and red lines were never run. The most useful columns are **Missed Instructions** and **Missed Branches**; branches are mostly `if`/`else` error paths. `jacoco.csv` and `jacoco.xml` in the same folder hold the same numbers for tools. `backend/target/` is git-ignored.
+Create the `boardly` namespace, a `boardly-secret` containing `DB_USERNAME`, `DB_PASSWORD`, and a `JWT_SECRET` of at least 32 bytes, and a `boardly-db-init` ConfigMap from the SQL files under `database/`. Do not commit these credentials.
 
-## Kubernetes
+Apply the manifests in dependency order:
 
-Jenkins creates the database ConfigMap from `database/Boardly_schema.sql` and `database/seed-dev.sql`, creates the `boardly-registry` image-pull secret from its registry credentials, then applies `k8s/00-namespace.yaml` through `k8s/30-frontend.yaml`. Configure the Jenkins `boardly-registry-url` credential as the registry host and optional namespace (for example, `docker.io/yourorg`, without a scheme), and `boardly-registry-creds` as a username/password credential. The cluster also needs `kubectl` and a configured Kubernetes context.
+```powershell
+kubectl apply -f k8s/00-namespace.yaml
+kubectl apply -f k8s/10-postgres.yaml
+kubectl -n boardly rollout status deployment/boardly-db --timeout=180s
+kubectl apply -f k8s/15-db-migrate.yaml
+kubectl -n boardly wait --for=condition=complete job/boardly-db-migrate --timeout=120s
+kubectl apply -f k8s/20-backend.yaml
+kubectl apply -f k8s/30-frontend.yaml
+kubectl -n boardly rollout status deployment/boardly-backend --timeout=180s
+kubectl -n boardly rollout status deployment/boardly-frontend --timeout=120s
+kubectl -n boardly port-forward service/frontend 8443:80
+```
 
-The `Tests/` manifests are retained as historical test fixtures; production deployment uses `k8s/`.
+Phase 5 verified these manifests locally with Minikube. Production or shared-cluster deployment is outside this guide.
+
+## Troubleshooting
+
+- Docker is unavailable: start Docker Desktop and confirm `docker version` succeeds.
+- PostgreSQL is unavailable: run `docker compose ps` and inspect `docker compose logs db`.
+- Backend startup fails: check the database variables, schema initialization, Java 21, and the 32-byte minimum for `JWT_SECRET`.
+- Nginx reports an upstream/DNS error: confirm the backend container is healthy before testing the frontend proxy.
+- Kubernetes shows `ImagePullBackOff`: load the local images into Minikube or configure the intended registry and pull secret.
+- A variable is missing: compare the runtime environment with `backend/.env.example` and `frontend/.env.example`; never commit real secrets.
+
+## Project Version
+
+The frontend package is `1.0.0`; the backend artifact is `0.0.1-SNAPSHOT`. This repository currently has no Git release tag, so the README does not claim a separate release version.

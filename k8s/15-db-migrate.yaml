@@ -1,0 +1,40 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: boardly-db-migrate
+  namespace: boardly
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: boardly-db-migrate
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: postgres:16-alpine
+          env:
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef: { name: boardly-secret, key: DB_USERNAME }
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef: { name: boardly-secret, key: DB_PASSWORD }
+          command: ["/bin/sh", "-c"]
+          args:
+            - >-
+              until pg_isready -h db -U "$DB_USERNAME" -d boardly_db; do sleep 2; done;
+              psql -v ON_ERROR_STOP=1 -h db -U "$DB_USERNAME" -d boardly_db
+              -f /migrations/001-create-notifications.sql
+          volumeMounts:
+            - name: migrations
+              mountPath: /migrations
+              readOnly: true
+      volumes:
+        - name: migrations
+          configMap:
+            name: boardly-db-init
+            items:
+              - key: 001-create-notifications.sql
+                path: 001-create-notifications.sql

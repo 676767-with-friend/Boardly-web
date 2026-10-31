@@ -96,6 +96,12 @@ public class CartService {
                 .orElseThrow(() -> new BoardlyException("Your cart is empty.", HttpStatus.UNPROCESSABLE_ENTITY.value(), "CART_EMPTY"));
     }
 
+    @Transactional
+    public Cart requireActiveCartForUpdate(AuthUser authUser) {
+        return cartRepository.findByUserIdAndStatusForUpdate(authUser.id(), Cart.CartStatus.active)
+                .orElseThrow(() -> new BoardlyException("Your cart is empty.", HttpStatus.UNPROCESSABLE_ENTITY.value(), "CART_EMPTY"));
+    }
+
     @Transactional(readOnly = true)
     public List<CartItem> activeItems(Cart cart) {
         return cartItemRepository.findByCartIdOrderByCreatedAtAsc(cart.getId());

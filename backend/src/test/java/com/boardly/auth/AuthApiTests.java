@@ -25,6 +25,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -33,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@ActiveProfiles("dev")
 @Import(AuthApiTests.AuthorizationProbeController.class)
 @Transactional
 class AuthApiTests {
@@ -48,6 +50,26 @@ class AuthApiTests {
     @Autowired private TokenHasher tokenHasher;
     @Autowired private PasswordEncoder passwordEncoder;
     @Autowired private JdbcTemplate jdbcTemplate;
+
+    @Test
+    void registrationRequiresConsentAndPasswordRecoveryDoesNotRevealAccounts() throws Exception {
+        mockMvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"firstName":"No","lastName":"Consent","email":"no-consent@example.test",
+                                 "password":"BoardlyOriginal!2026","acceptTerms":false,"acceptPrivacy":true}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("CONSENT_REQUIRED"));
+
+        mockMvc.perform(post("/api/auth/forgot-password").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"missing-account@example.test\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").isNotEmpty())
+                .andExpect(jsonPath("$.devResetUrl").doesNotExist());
+
+        mockMvc.perform(post("/api/auth/logout").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isNoContent());
+    }
 
     @Test
     void registrationCreatesOnlyACustomerWithBcryptPasswordAndRejectsDuplicates() throws Exception {
@@ -159,9 +181,56 @@ class AuthApiTests {
                 .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
     }
 
+    @Test
+    void inactiveAccountCannotUseExistingSessionOrPasswordRecovery() throws Exception {
+        String email = uniqueEmail("inactive");
+        JsonNode registration = register(email, ORIGINAL_PASSWORD);
+        String accessToken = registration.get("accessToken").asText();
+        String resetToken = requestResetToken(email);
+
+        User user = userRepository.findByEmailIgnoreCase(email).orElseThrow();
+        user.setStatus(User.UserStatus.inactive);
+        userRepository.saveAndFlush(user);
+
+        mockMvc.perform(get("/api/me").header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/auth/forgot-password").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + email + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.devResetUrl").doesNotExist());
+        mockMvc.perform(post("/api/auth/reset-password").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"token\":\"" + resetToken + "\",\"newPassword\":\"" + RESET_PASSWORD + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_RESET_TOKEN"));
+    }
+
+    @Test
+    void registrationRejectsInvalidPhoneAndNormalizesSupportedInternationalFormat() throws Exception {
+        String invalidEmail = uniqueEmail("invalid-phone");
+        mockMvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
+                        .content(registerBody(invalidEmail, ORIGINAL_PASSWORD).replace(
+                                "\"password\"", "\"phone\":\"phone\",\"password\"")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+        String validEmail = uniqueEmail("normalized-phone");
+        register(validEmail, ORIGINAL_PASSWORD, "+66 81-234-5678");
+        org.junit.jupiter.api.Assertions.assertEquals("0812345678",
+                userRepository.findByEmailIgnoreCase(validEmail).orElseThrow().getPhone());
+    }
+
     private JsonNode register(String email, String password) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
                         .content(registerBody(email, password)))
+                .andExpect(status().isCreated())
+                .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString());
+    }
+
+    private JsonNode register(String email, String password, String phone) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
+                        .content(registerBody(email, password).replace(
+                                "\"password\"", "\"phone\":\"" + phone + "\",\"password\"")))
                 .andExpect(status().isCreated())
                 .andReturn();
         return objectMapper.readTree(result.getResponse().getContentAsString());

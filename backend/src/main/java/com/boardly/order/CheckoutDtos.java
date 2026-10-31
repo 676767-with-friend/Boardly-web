@@ -1,5 +1,6 @@
 package com.boardly.order;
 
+import com.boardly.common.validation.PhoneNumbers;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -8,6 +9,7 @@ import java.util.UUID;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 public final class CheckoutDtos {
@@ -18,7 +20,7 @@ public final class CheckoutDtos {
             @NotBlank @Size(max = 100) String contactFirstName,
             @NotBlank @Size(max = 100) String contactLastName,
             @NotBlank @Email @Size(max = 255) String contactEmail,
-            @jakarta.validation.constraints.Pattern(regexp = "^$|0[689][0-9]{8}|0[2-5][0-9]{7,8}", message = "Enter a valid Thai phone number") @Size(max = 30) String contactPhone,
+            @Pattern(regexp = PhoneNumbers.OPTIONAL_PATTERN, message = PhoneNumbers.MESSAGE) @Size(max = 30) String contactPhone,
             @NotNull UUID fulfillmentMethodId,
             UUID pickupBranchId,
             @NotNull UUID paymentMethodId,

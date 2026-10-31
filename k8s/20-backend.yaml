@@ -14,7 +14,7 @@ spec:
         app: boardly-backend
     spec:
       imagePullSecrets:
-        - name: boardly-registry
+        - name: boardly-registry-pull
       containers:
         - name: backend
           image: boardly-backend:local
@@ -22,8 +22,6 @@ spec:
           ports:
             - containerPort: 8080
           env:
-            - name: SPRING_PROFILES_ACTIVE
-              value: dev
             - name: DB_URL
               value: jdbc:postgresql://db:5432/boardly_db
             - name: DB_USERNAME
@@ -35,8 +33,6 @@ spec:
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef: { name: boardly-secret, key: JWT_SECRET }
-            - name: FRONTEND_BASE_URL
-              value: http://localhost:8443
           resources:
             requests:
               memory: 384Mi
@@ -50,6 +46,13 @@ spec:
             initialDelaySeconds: 20
             periodSeconds: 5
             failureThreshold: 20
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            failureThreshold: 3
 ---
 apiVersion: v1
 kind: Service

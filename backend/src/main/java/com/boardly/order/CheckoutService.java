@@ -1,5 +1,7 @@
 package com.boardly.order;
 
+import com.boardly.common.validation.PhoneNumbers;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
@@ -87,7 +89,7 @@ public class CheckoutService {
     public CheckoutDtos.OrderResponse checkout(AuthUser authUser, CheckoutDtos.CheckoutRequest request) {
         User user = userRepository.findById(authUser.id())
                 .orElseThrow(() -> new BoardlyException("Your account is unavailable.", HttpStatus.UNAUTHORIZED.value(), "AUTHENTICATION_REQUIRED"));
-        Cart cart = cartService.requireActiveCart(authUser, null);
+        Cart cart = cartService.requireActiveCartForUpdate(authUser);
         List<CartItem> cartItems = cartService.activeItems(cart);
         if (cartItems.isEmpty()) {
             throw new BoardlyException("Your cart is empty.", HttpStatus.UNPROCESSABLE_ENTITY.value(), "CART_EMPTY");
@@ -127,7 +129,7 @@ public class CheckoutService {
         order.setContactFirstName(request.contactFirstName().trim());
         order.setContactLastName(request.contactLastName().trim());
         order.setContactEmail(request.contactEmail().trim().toLowerCase());
-        order.setContactPhone(blankToNull(request.contactPhone()));
+        order.setContactPhone(PhoneNumbers.normalize(request.contactPhone()));
         order.setShippingAddress(null);
         order.setShippingDistrict(null);
         order.setShippingProvince(null);

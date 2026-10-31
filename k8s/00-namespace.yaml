@@ -2,14 +2,3 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: boardly
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: boardly-secret
-  namespace: boardly
-type: Opaque
-stringData:
-  DB_USERNAME: boardly
-  DB_PASSWORD: boardly
-  JWT_SECRET: boardly-k8s-development-jwt-secret-at-least-32-characters
