@@ -149,4 +149,6 @@ Phase 5 verified these manifests locally with Minikube. Production or shared-clu
 
 ## Project Version
 
-The frontend package is `1.0.0`; the backend artifact is `0.0.1-SNAPSHOT`. This repository currently has no Git release tag, so the README does not claim a separate release version.
+**Boardly Project Version: 1.2**
+
+This version includes the integrated frontend and backend improvements, reservation and session management fixes, branch location support, automated testing, and CI/CD enhancements.
