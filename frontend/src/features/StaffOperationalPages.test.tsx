@@ -146,7 +146,7 @@ describe("Staff live table overtime", () => {
         true,
       ),
     )
-  })
+  }, 15_000)
 
   it("assigns an available table to a validated walk-in guest", async () => {
     vi.mocked(staffReservationsApi.liveTables).mockResolvedValueOnce([

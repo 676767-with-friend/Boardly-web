@@ -33,7 +33,9 @@ class JwtServiceTests {
         assertThrows(JwtService.InvalidJwtException.class, () -> service.parse("not-a-jwt"));
 
         String token = service.issueAccessToken(UUID.randomUUID(), UUID.randomUUID());
-        String tampered = token.substring(0, token.length() - 1) + (token.endsWith("A") ? "B" : "A");
+        int signatureStart = token.lastIndexOf('.') + 1;
+        char replacement = token.charAt(signatureStart) == 'A' ? 'B' : 'A';
+        String tampered = token.substring(0, signatureStart) + replacement + token.substring(signatureStart + 1);
         assertNotEquals(token, tampered);
         assertThrows(JwtService.InvalidJwtException.class, () -> service.parse(tampered));
     }

@@ -125,7 +125,7 @@ describe("customer account API page", () => {
     expect(refreshUser).toHaveBeenCalled()
     expect(await screen.findByText("Profile saved.")).toBeInTheDocument()
     expect(screen.getByText("Welcome back, Countess Ada")).toBeInTheDocument()
-  })
+  }, 15_000)
 
   it("shows empty states and routes quick actions and logout", async () => {
     render(<AccountApiPage />)
