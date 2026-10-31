@@ -1,5 +1,5 @@
 // frontend/cypress/e2e/shop.cy.js
-// ใช้ cy.mockCatalog() (support/commands.ts) + fixtures: categories.json, products.json, product-detail.json
+// ใช้ cy.mockCatalog() (support/commands.ts) + fixtures: Categories.json, Products.json, Product-detail.json
 describe('Boardly - Shop Page', () => {
   beforeEach(() => {
     cy.mockCatalog()
@@ -17,7 +17,7 @@ describe('Boardly - Shop Page', () => {
   it('Should filter products by category when a sidebar item is clicked', () => {
     cy.intercept(
       { method: 'GET', pathname: '/api/products', query: { category: 'Strategy' } },
-      { fixture: 'products.json' },
+      { fixture: 'Products.json' },
     ).as('getFiltered')
 
     cy.contains('aside button', 'Strategy').click()
@@ -27,7 +27,7 @@ describe('Boardly - Shop Page', () => {
   it('Should filter products by difficulty', () => {
     cy.intercept(
       { method: 'GET', pathname: '/api/products', query: { difficulty: 'easy' } },
-      { fixture: 'products.json' },
+      { fixture: 'Products.json' },
     ).as('getEasy')
 
     cy.contains('aside button', 'Easy').click()
@@ -37,7 +37,7 @@ describe('Boardly - Shop Page', () => {
   it('Should re-query the API when the sort order changes', () => {
     cy.intercept(
       { method: 'GET', pathname: '/api/products', query: { sort: 'priceAsc' } },
-      { fixture: 'products.json' },
+      { fixture: 'Products.json' },
     ).as('getSorted')
 
     cy.get('select').select('Price: Low to High')
@@ -59,7 +59,7 @@ describe('Boardly - Shop Page', () => {
   it('Should navigate to the product detail page when a product card is clicked', () => {
     cy.intercept(
       { method: 'GET', pathname: '/api/products/prod-001' },
-      { fixture: 'product-detail.json' },
+      { fixture: 'Product-detail.json' },
     ).as('getProduct')
 
     cy.contains('Catan').click()
