@@ -15,7 +15,16 @@ Before editing, the working tree was clean. Existing validation was attempted be
 
 No application test failure was observed locally. The local tool/runtime failures above predate this change. Static checks passed: both workflow files and all canonical Kubernetes manifests parsed as YAML with SnakeYAML 2.2; `bash -n .github/scripts/deploy.sh`, `docker compose config -q`, and `git diff --check` passed. A GitHub Actions-specific linter was unavailable. Registry publication and deployment have **not** been run.
 
-The [last CI run on the unchanged `main` commit](https://github.com/676767-with-friend/Boardly-web/actions/runs/42537999536) passed frontend, backend, and Cypress on 9 November 2026. That run predates this migration and is evidence for the pre-Phase 1 remote baseline only. A pull-request run of the Phase 1 changes is still needed before Phase 2 can start.
+## Observed GitHub Actions baseline
+
+| Run | Frontend build + Vitest | Backend Maven verify | Cypress E2E |
+| --- | --- | --- | --- |
+| [PR #8 CI run #45, Phase 1 commit `92cf092`](https://github.com/676767-with-friend/Boardly-web/actions/runs/42955614683), 11 November 2026 | Passed | Passed | Passed |
+| [Last unchanged `main` CI run #44](https://github.com/676767-with-friend/Boardly-web/actions/runs/42537999536), 9 November 2026 | Passed | Passed | Passed |
+
+The PR run verifies the Phase 1 workflow and application checks on GitHub-hosted runners. The `main` run is pre-migration context. No required CI check failed in the observed PR run, so no migration-related workflow fix or test rerun was needed. The manual release gate passed local mock cases for success, a missing job, a failed run, a different commit, and a newer failed run; the release workflow itself has not been dispatched. Registry publication, Minikube deployment, and the in-cluster smoke check remain unrun. Local build/test execution remains blocked by the tool limitations in the table above. GitHub reports that `main` currently has no branch protection rule; the release gate still checks the three named CI jobs independently.
+
+This passing PR run provides a usable CI baseline for Phase 2. Recheck all three jobs if the Phase 1 branch changes again before merge.
 
 ## Jenkins migration map
 
