@@ -12,6 +12,7 @@ import {
   type StaffReservation,
 } from "@/services/reservationsApi"
 import { thaiPhoneError } from "@/utils/phone"
+import { formatCurrency as money } from "@/utils/currency"
 import { tableStatusStyle as statusStyle } from "./tableStatusStyle"
 
 const inputClass =
@@ -20,12 +21,6 @@ const errorMessage = (error: unknown, fallback: string) =>
   typeof error === "object" && error !== null && "message" in error
     ? String(error.message)
     : fallback
-const money = (value: number, currency = "THB") =>
-  new Intl.NumberFormat("en-TH", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0,
-  }).format(value)
 const dateTime = (value: string) =>
   new Intl.DateTimeFormat("en-GB", {
     dateStyle: "medium",

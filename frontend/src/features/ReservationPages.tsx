@@ -14,6 +14,7 @@ import {
 import type { PublicBranch } from "@/types"
 import { addCalendarDays, bangkokDateString } from "@/utils/bangkokDate"
 import { branchAddress } from "@/utils/branchLocation"
+import { formatCurrency as money } from "@/utils/currency"
 import { thaiPhoneError } from "@/utils/phone"
 import { tableStatusStyle as statusStyle } from "./tableStatusStyle"
 import ReservationFloorPlan from "./ReservationFloorPlan"
@@ -49,14 +50,6 @@ function formatDate(value: string) {
     year: "numeric",
     timeZone: "Asia/Bangkok",
   }).format(new Date(`${value}T00:00:00${BANGKOK_OFFSET}`))
-}
-
-function money(value: number, currency = "THB") {
-  return new Intl.NumberFormat("en-TH", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 0,
-  }).format(value)
 }
 
 function localIso(date: string, time: string) {
