@@ -2,7 +2,7 @@
 
 ## Scope and reference
 
-Phase 2 is draft [PR #9](https://github.com/676767-with-friend/Boardly-web/pull/9), based on the still-open Phase 1 [PR #8](https://github.com/676767-with-friend/Boardly-web/pull/8). The last application implementation head, `5f5c21e2d46936a711c616c069efa42d370d0da1`, passed all three jobs in [CI run #52](https://github.com/676767-with-friend/Boardly-web/actions/runs/42997935362). The run included the reconciled Java tests, shared frontend formatting, and management service readability changes. This file records observed checks, not a guarantee of all behavior.
+Phase 2 was delivered in [PR #9](https://github.com/676767-with-friend/Boardly-web/pull/9), retargeted to `main` after Phase 1 [PR #8](https://github.com/676767-with-friend/Boardly-web/pull/8) merged. The last application implementation head, `5f5c21e2d46936a711c616c069efa42d370d0da1`, passed all three jobs in [CI run #52](https://github.com/676767-with-friend/Boardly-web/actions/runs/42997935362). The run included the reconciled Java tests, shared frontend formatting, and management service readability changes. The original final PR head also passed [run #53](https://github.com/676767-with-friend/Boardly-web/actions/runs/42999190143). Check the latest post-retarget PR run before merging. This file records observed checks, not a guarantee of all behavior.
 
 ## Results
 

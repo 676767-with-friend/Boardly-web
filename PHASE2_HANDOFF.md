@@ -3,12 +3,12 @@
 ## Branch and baseline
 
 - Branch: `chore/phase2-maintainability`, based on verified Phase 1 commit `4e9628df94ec59e4eb1c888e6c2bb9da1ecffed2`.
-- Phase 1 remains unmerged in draft [PR #8](https://github.com/676767-with-friend/Boardly-web/pull/8). Its [final CI run](https://github.com/676767-with-friend/Boardly-web/actions/runs/42956208466) passed frontend, backend, and Cypress. Phase 2 is draft [PR #9](https://github.com/676767-with-friend/Boardly-web/pull/9), targeting the Phase 1 branch.
+- Phase 1 [PR #8](https://github.com/676767-with-friend/Boardly-web/pull/8) merged into `main` at `23f9a19f9cebaf6a5a43b5014d84a38607a45c80` after its updated head passed frontend, backend, and Cypress in [run #54](https://github.com/676767-with-friend/Boardly-web/actions/runs/43002024286). Phase 2 was delivered in [PR #9](https://github.com/676767-with-friend/Boardly-web/pull/9), retargeted to `main` for merge.
 - Earlier implementation commits: `db0dab2e5b1b3be00957400099bd938209120fc2`, `4b2a300ab6d7e3264685317a89d28c16a17ade2e`, and `8ca9dc8830b50495e3f0cd826ff0e07fcefcac8b`.
 
 ## Continuation from verified checkpoint
 
-- The previous Phase 2 head `75866cfeda645bc6bbcaa57312109732b31cda65` passed all three jobs in [PR #9 CI run #48](https://github.com/676767-with-friend/Boardly-web/actions/runs/42958784133). The work below continues from that commit; Phase 1 remains unmerged.
+- The previous Phase 2 head `75866cfeda645bc6bbcaa57312109732b31cda65` passed all three jobs in [PR #9 CI run #48](https://github.com/676767-with-friend/Boardly-web/actions/runs/42958784133). The work below continued from that commit while Phase 1 was still unmerged.
 - Earlier implementation commits `6ef026ffb634301728e9bdd18ff4e8d548bd62d7` and `1966dfc10b1732598086e8b2d765ece700841321` passed all three jobs in [PR #9 CI run #49](https://github.com/676767-with-friend/Boardly-web/actions/runs/42966523985); the documentation head passed [run #50](https://github.com/676767-with-friend/Boardly-web/actions/runs/42967178511).
 - The final Phase 2 implementation commits are `03522e623430d3273e489e5515d630af1331c497` (legacy Java test reconciliation), `3d9a701196c9b5bafd50ded99f4047eaec692851` (shared currency formatting), and `3506d0a72adb9f54365552799a1313fe0865c295` (management branch readability). The combined head passed all three jobs in [PR #9 CI run #52](https://github.com/676767-with-friend/Boardly-web/actions/runs/42997935362). Run #51 was cancelled by the workflow's concurrency rule after a newer push; it was not a test failure.
 
@@ -46,7 +46,7 @@ The backend environment example now matches the local Compose host port and user
 
 The focused frontend review found a cohesive reservation floor plan boundary and genuinely duplicated currency and table styles, now extracted. The remaining large page modules own intertwined form and request state; further splits would add indirection without a clearer independent responsibility. The backend review addressed duplicate media lookup and dense branch management code; reservation, session, checkout, inventory, and authorization logic was left intact because its active API suites already exercise critical behavior and no safe behavior-preserving simplification was identified. The original `fmt` utility formats differently and was retained. No supported dependency, API contract, database schema, or workflow was removed.
 
-Phase 2 refactoring is complete within the reviewed scope. Phase 3 application verification is recorded in `PHASE3_VERIFICATION.md`. Release publication and Minikube deployment remain separate, manual, unverified operations. To resume after this handoff, run `git switch chore/phase2-maintainability`, inspect `git status --short --branch` and draft PR #9, and confirm its latest Frontend, Backend, and Cypress jobs passed. PR #9 still depends on unmerged Phase 1 PR #8 and targets `chore/phase1-verified-ci-baseline`; preserve that base until Phase 1 is merged or retarget carefully afterward.
+Phase 2 refactoring is complete within the reviewed scope. Phase 3 application verification is recorded in `PHASE3_VERIFICATION.md`. Release publication and Minikube deployment remain separate, manual, unverified operations. During merge review, Phase 1's Vercel safeguard was merged into this branch without rewriting history (`3a8dfca68cf71ac84cd59fe4617abe249a5682e0`), and PR #9 was retargeted to `main`. Before merging, inspect `git status --short --branch`, PR #9, and its latest Frontend, Backend, and Cypress jobs. After merging, verify the push-triggered `main` run.
 
 ## Prioritized plan and checkpoints
 
