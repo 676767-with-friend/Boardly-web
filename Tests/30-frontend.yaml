@@ -13,7 +13,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          # Jenkins replaces this with <registry>/boardly-frontend:<build-tag> at deploy time
+          # Historical artifact; the active workflow deploys from k8s/30-frontend.yaml.
           image: boardly-frontend:latest
           imagePullPolicy: IfNotPresent
           ports: [{ containerPort: 80 }]

@@ -8,13 +8,13 @@ Boardly is a full-stack board game store and cafe system. Customers can manage a
 - Backend: Java 21, Spring Boot 3.3, Spring Security, Spring Data JPA, and Maven
 - Database: PostgreSQL 16
 - Testing: JUnit, Spring MockMvc, JaCoCo, Vitest, React Testing Library, and Cypress
-- Delivery: Docker Compose, GitHub Actions, Jenkins, and Kubernetes manifests
+- Delivery: Docker Compose, GitHub Actions, and Kubernetes manifests
 
 ## Prerequisites
 
 For the recommended setup, install Docker with Docker Compose.
 
-For manual development, also install Java 21, Maven 3.9+, Node.js 22, and pnpm 10.34.3. Kubernetes deployment additionally requires `kubectl`, Docker, and a disposable local cluster such as Minikube.
+For manual development, also install Java 21, Maven 3.9+, Node.js 22, and pnpm 10.34.3. Kubernetes deployment additionally requires `kubectl` and access to the existing Minikube cluster.
 
 ## Quick Start
 
@@ -70,7 +70,7 @@ The frontend runs on `http://localhost:8443` and proxies `/api` to the backend o
 
 ## Testing
 
-Backend tests require Java 21 and an isolated PostgreSQL 16 database initialized with `database/Boardly_schema.sql` and `database/seed-dev.sql`. Set `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, and a test-only `JWT_SECRET`, then run:
+Backend tests require Java 21 and an isolated PostgreSQL 16 database initialized with `database/Boardly_schema.sql` and `database/seed-dev.sql`. For example, set `BOARDLY_DB_PORT=55433` and run `docker compose -p boardly-test up -d db`, then set `DB_URL=jdbc:postgresql://localhost:55433/boardly_db`, `DB_USERNAME=boardly`, `DB_PASSWORD=boardly`, `SPRING_PROFILES_ACTIVE=test`, and a test-only `JWT_SECRET`. Do not point tests at a shared or production database. Then run:
 
 ```powershell
 cd backend
@@ -91,7 +91,7 @@ corepack pnpm test:coverage
 
 The frontend coverage report is written to `frontend/coverage/index.html`.
 
-Run Cypress only after the complete Docker Compose stack is healthy:
+Run Cypress only after the complete Docker Compose stack is healthy. Keep the application stack on its default port 8443 and the isolated backend test database in a separate project/port:
 
 ```powershell
 cd frontend
@@ -100,11 +100,13 @@ corepack pnpm exec cypress run
 
 ## CI/CD
 
-- `.github/workflows/ci.yml` builds and tests both applications and runs Cypress against Docker Compose. Local commands are verified; a current remote GitHub Actions run has not been verified.
-- `Jenkinsfile` builds, tests, publishes commit-tagged images, and deploys through an authorized Kubernetes context. A current remote Jenkins run has not been verified.
+- `.github/workflows/ci.yml` validates pushes and pull requests targeting `main`. Its existing check names remain `Frontend (build + Vitest)`, `Backend (mvn verify)`, and `E2E (Cypress)`. It builds the frontend, runs Vitest with coverage, builds/tests the backend against an isolated PostgreSQL service, and runs Cypress against a Compose stack. Test reports, coverage, Cypress screenshots/videos, and failure logs are uploaded when available. Pull requests need no registry or deployment credentials.
+- `.github/workflows/release.yml` runs only when a maintainer explicitly starts **Publish and deploy** with **Run workflow** on `main` in the Actions tab. It refuses publication unless the exact `main` commit has a successful push-triggered `CI` run with all three named jobs passing. It then builds and pushes both Docker images to the existing configured registry, tagged with that commit SHA, and deploys those tags to Minikube with in-cluster HTTP smoke checks. A run requested on another ref skips publication. No release has been run or verified.
 - `backend/Dockerfile`, `frontend/Dockerfile`, and `compose.yaml` build the local application images and runtime stack.
 
-Do not treat local success as proof that remote credentials, registries, or deployment agents are configured correctly.
+Configure the repository secret `IMAGE_REGISTRY` with the same registry host/path used by the former pipeline (for example, `registry.example.com/team`, without an image name or trailing slash). Configure repository secrets `REGISTRY_USERNAME`, `REGISTRY_PASSWORD`, `K8S_DB_USERNAME`, `K8S_DB_PASSWORD`, and `K8S_JWT_SECRET`; the JWT secret must be at least 32 bytes. The release workflow uses only `contents: read` and `actions: read` permissions and does not require a GitHub Packages token. Restrict who can push to `main` and configure approval/protection rules on the `minikube` GitHub Environment as appropriate.
+
+The deployment job requires an **authorized Linux self-hosted GitHub Actions runner** with Bash, `kubectl`, a working kubeconfig whose current context is `minikube`, network access to that Minikube API and to the existing image registry, and permission to create/update the resources in `boardly`. A GitHub-hosted runner cannot be assumed to reach a private/local Minikube cluster. No runner is provisioned here; if someone manually requests a release before one is configured, publication can succeed but deployment will remain queued. Do not store kubeconfig or live credentials in this repository.
 
 ## Local Kubernetes Deployment
 
@@ -136,7 +138,7 @@ kubectl -n boardly rollout status deployment/boardly-frontend --timeout=120s
 kubectl -n boardly port-forward service/frontend 8443:80
 ```
 
-Phase 5 verified these manifests locally with Minikube. Production or shared-cluster deployment is outside this guide.
+Phase 5 previously verified these manifests locally with Minikube; Phase 1 did not re-run deployment. Production or shared-cluster deployment is outside this guide.
 
 ## Troubleshooting
 
