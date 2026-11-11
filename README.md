@@ -40,10 +40,11 @@ Demo accounts are defined in `database/seed-dev.sql` and are intended only for i
 
 ## Development Setup
 
-Start PostgreSQL:
+Start PostgreSQL and apply the notification migration:
 
 ```powershell
 docker compose up -d db
+docker compose run --rm db-migrate
 ```
 
 Start the backend:
@@ -67,6 +68,9 @@ corepack pnpm dev
 ```
 
 The frontend runs on `http://localhost:8443` and proxies `/api` to the backend on port `8080`.
+The environment examples use these local ports and the same `/api` proxy. Set the backend example's placeholder password to `boardly` only for the local Compose database; use separate credentials for any other database.
+
+On a fresh Compose database, `database/Boardly_schema.sql` creates the notification table. The migration in `database/migrations/001-create-notifications.sql` adds it to an older database that does not have the table. Both paths are retained. The migration's `IF NOT EXISTS` clauses do not repair an existing table with a different structure; that case requires a separately reviewed data migration. Do not delete the Compose volume to resolve a schema mismatch.
 
 ## Testing
 
