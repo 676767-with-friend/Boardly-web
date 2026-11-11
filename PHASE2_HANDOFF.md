@@ -9,14 +9,14 @@
 ## Continuation from verified checkpoint
 
 - The previous Phase 2 head `75866cfeda645bc6bbcaa57312109732b31cda65` passed all three jobs in [PR #9 CI run #48](https://github.com/676767-with-friend/Boardly-web/actions/runs/42958784133). The work below continues from that commit; Phase 1 remains unmerged.
-- Current implementation commit: `1966dfc10b1732598086e8b2d765ece700841321` (batch 5); previous implementation commit `6ef026ffb634301728e9bdd18ff4e8d548bd62d7` (batch 4). GitHub CI is pending for these commits.
+- Current implementation commit: `1966dfc10b1732598086e8b2d765ece700841321` (batch 5); previous implementation commit `6ef026ffb634301728e9bdd18ff4e8d548bd62d7` (batch 4). [PR #9 CI run #49](https://github.com/676767-with-friend/Boardly-web/actions/runs/42966523985) passed Frontend, Backend, and Cypress on the combined implementation head `e288c0556e6c053a8663e48e465e1272cf91f11a`.
 - This is a **Phase 2 checkpoint**, with broader page cleanup and legacy test coverage triage still open.
 
 ### Batch 4 — reservation floor plan
 
 `ReservationPage` now imports `ReservationFloorPlan.tsx`, which owns the existing zone grouping, table buttons, and selection appearance. This gives the stateful reservation wizard a clear UI boundary without changing classes, text, props, routes, or API calls. `ReservationFloorPlan.test.tsx` checks displayed zone/table order and selection. The existing reservation page suite still exercises the full wizard.
 
-Verification at `6ef026f`: local focused Vitest run passed (13/13 tests across the new component and existing reservation page suite); local Vite production build passed; `git diff --check` passed. GitHub frontend, backend, and Cypress checks have not yet run for this commit.
+Verification at `6ef026f`: local focused Vitest run passed (13/13 tests across the new component and existing reservation page suite); local Vite production build passed; `git diff --check` passed. The combined implementation head passed all three GitHub jobs in run #49 above.
 
 ### Batch 5 — obsolete legacy manifests
 
@@ -24,11 +24,11 @@ Removed `Tests/10-postgres.yaml`, `Tests/20-backend.yaml`, and `Tests/30-fronten
 
 Kept `Tests/AdminOperationsApiTests.java`: it is outside Maven's test tree and overlaps the active `ManagementAdminApiTests`, `ManagementApiTests`, and customer self-service suites, but exact coverage has not been fully reconciled. It must not be counted as passing CI coverage. Decide whether to migrate any unique assertions in a future focused batch.
 
-Verification at `1966dfc`: repository reference search confirmed no active path uses `Tests/*.yaml`; `git diff --check` passed. No local runtime test was needed for deletion of inactive examples. GitHub CI for the final implementation commit is pending.
+Verification at `1966dfc`: repository reference search confirmed no active path uses `Tests/*.yaml`; `git diff --check` passed. No local runtime test was needed for deletion of inactive examples. The combined implementation head passed all three GitHub jobs in run #49 above.
 
 ## Remaining cleanup and resume steps
 
-This is still a bounded Phase 2 checkpoint. In priority order: (1) verify all three PR checks for the latest implementation and documentation heads; (2) compare the standalone Java test's assertions with active Maven suites and migrate only unique coverage; (3) select another cohesive component or logic boundary in a large frontend page if the benefit justifies the change; (4) review the notification schema/migration compatibility separately before any database edit.
+This is still a bounded Phase 2 checkpoint. In priority order: (1) verify all three PR checks for the documentation-only head produced by this handoff update; (2) compare the standalone Java test's assertions with active Maven suites and migrate only unique coverage; (3) select another cohesive component or logic boundary in a large frontend page if the benefit justifies the change; (4) review the notification schema/migration compatibility separately before any database edit.
 
 Resume with `git switch chore/phase2-maintainability`, `git status --short --branch`, and `git log -5 --oneline`. Read this file and inspect draft PR #9 targeting `chore/phase1-verified-ci-baseline`. For each new implementation batch, run its focused tests, commit task files, update this handoff with the commit and results, push, and check the PR's Frontend, Backend, and Cypress jobs. Keep release manual-only; do not merge, publish, or deploy.
 
