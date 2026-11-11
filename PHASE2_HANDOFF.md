@@ -10,7 +10,7 @@
 
 - The previous Phase 2 head `75866cfeda645bc6bbcaa57312109732b31cda65` passed all three jobs in [PR #9 CI run #48](https://github.com/676767-with-friend/Boardly-web/actions/runs/42958784133). The work below continues from that commit; Phase 1 remains unmerged.
 - Current implementation commit: `03522e623430d3273e489e5515d630af1331c497` (batch 6), awaiting CI. Previous implementation commits: `6ef026ffb634301728e9bdd18ff4e8d548bd62d7` and `1966dfc10b1732598086e8b2d765ece700841321`. [PR #9 CI run #49](https://github.com/676767-with-friend/Boardly-web/actions/runs/42966523985) passed Frontend, Backend, and Cypress on the prior combined implementation head `e288c0556e6c053a8663e48e465e1272cf91f11a`; the later documentation-only head also passed [run #50](https://github.com/676767-with-friend/Boardly-web/actions/runs/42967178511).
-- The legacy Java test was reconciled in `03522e623430d3273e489e5515d630af1331c497`; GitHub verification of that commit is pending.
+- The legacy Java test was reconciled in `03522e623430d3273e489e5515d630af1331c497`; GitHub verification is pending. Subsequent implementation commits are `3d9a701196c9b5bafd50ded99f4047eaec692851` (batch 7) and `3506d0a72adb9f54365552799a1313fe0865c295` (batch 8).
 - This remains a Phase 2 checkpoint while final code review and system verification are in progress.
 
 ### Batch 6 — legacy Java test reconciliation
@@ -18,6 +18,14 @@
 The ten scenarios in the standalone `Tests/AdminOperationsApiTests.java` were mapped to active Maven coverage. Branch create/update and manager denial map to `ManagementAdminApiTests` branch cases; product create/update and validation map to its product cases; user status and manager denial map to its user cases; staff search and reassignment map to its staff cases; customer reservation and order lookup map to `MyReservationsApiTests` and `CartCheckoutApiTests`. The active `GlobalInventoryApiTests` covers stock addition, but did not follow a newly created product. The active staff order test covered branch scope using existing orders, but did not assert visibility of a fresh checkout. Those two gaps were added to `ManagementAdminApiTests` with response and branch-scope assertions. Existing active tests also cover authorization, validation, and database effects more thoroughly than the legacy file.
 
 The standalone file and its now-empty `Tests/README.md` were removed; the active tests are transactional and use isolated CI data. No application code or behavior changed in this batch. `git diff --check` passed. Maven is absent locally, so the changed tests have **not yet run**; GitHub CI is required. No legacy assertion remains intentionally unresolved.
+
+### Batch 7 — shared frontend currency formatting
+
+The reservation, live-staff, staff-management, and admin pages used four identical `Intl.NumberFormat("en-TH", { style: "currency", currency, maximumFractionDigits: 0 })` implementations. All now use `frontend/src/utils/currency.ts` with the same default and per-call currency arguments; the older `fmt` utility remains unchanged because its output differs. Focused Vitest tests for the four callers and the new utility passed (36/36), and the Vite production build passed locally. No CSS, text, route, or API call changed. GitHub CI is pending.
+
+### Batch 8 — management branch code
+
+Expanded four dense methods in `ManagementService` into readable blocks: branch response mapping, branch assignment replacement and validation, and branch-scope lookup. Conditions, query calls, iteration order, exception text/codes, timestamps, and transaction annotations are unchanged. Existing active management API tests cover branch responses, assignment updates, role restrictions, and unassigned staff. `git diff --check` passed; Maven is unavailable locally, so GitHub CI verification is pending.
 
 ### Batch 4 — reservation floor plan
 
