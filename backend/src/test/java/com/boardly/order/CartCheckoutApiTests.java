@@ -53,7 +53,8 @@ class CartCheckoutApiTests {
         String guestKey = UUID.randomUUID().toString();
         MvcResult added = mockMvc.perform(post("/api/cart/items").header("X-Guest-Session-Key", guestKey)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"productId\":\"" + WINGSPAN_ID + "\",\"quantity\":2}"))
-                .andExpect(status().isCreated()).andExpect(jsonPath("$.itemCount").value(2)).andReturn();
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.itemCount").value(2))
+                .andExpect(jsonPath("$.items[0].image").value("/product-media/Wingspan.jpg")).andReturn();
         String itemId = objectMapper.readTree(added.getResponse().getContentAsString()).at("/items/0/id").asText();
 
         mockMvc.perform(patch("/api/cart/items/{itemId}", itemId).header("X-Guest-Session-Key", guestKey)
@@ -64,6 +65,17 @@ class CartCheckoutApiTests {
                 .andExpect(status().isNoContent());
         mockMvc.perform(get("/api/cart").header("X-Guest-Session-Key", guestKey))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.itemCount").value(0));
+    }
+
+    @Test
+    void cartUsesFirstMediaWhenNoPrimaryImageExists() throws Exception {
+        String guestKey = UUID.randomUUID().toString();
+        jdbcTemplate.update("UPDATE product_media SET is_primary = false WHERE product_id = ?::uuid", WINGSPAN_ID);
+
+        mockMvc.perform(post("/api/cart/items").header("X-Guest-Session-Key", guestKey)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"productId\":\"" + WINGSPAN_ID + "\",\"quantity\":1}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.items[0].image").value("/product-media/Wingspan.jpg"));
     }
 
     @Test

@@ -135,10 +135,11 @@ public class CartService {
                 .map(item -> {
                     Product product = item.getProduct();
                     BigDecimal price = currentPrice(product);
-                    String image = mediaRepository.findByProductIdOrderBySortOrderAsc(product.getId()).stream()
+                    var mediaItems = mediaRepository.findByProductIdOrderBySortOrderAsc(product.getId());
+                    String image = mediaItems.stream()
                             .filter(media -> media.isPrimary() && media.getMediaType().name().equals("image"))
                             .findFirst()
-                            .or(() -> mediaRepository.findByProductIdOrderBySortOrderAsc(product.getId()).stream().findFirst())
+                            .or(() -> mediaItems.stream().findFirst())
                             .map(media -> media.getMediaUrl()).orElse(null);
                     return new CartDtos.CartItemResponse(item.getId(), product.getId(), product.getName(), product.getSku(), image,
                             price, item.getQuantity(), money(price.multiply(BigDecimal.valueOf(item.getQuantity()))));
