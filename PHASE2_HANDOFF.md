@@ -4,12 +4,12 @@
 
 - Branch: `chore/phase2-maintainability`, based on verified Phase 1 commit `4e9628df94ec59e4eb1c888e6c2bb9da1ecffed2`.
 - Phase 1 remains unmerged in draft [PR #8](https://github.com/676767-with-friend/Boardly-web/pull/8). Its [final CI run](https://github.com/676767-with-friend/Boardly-web/actions/runs/42956208466) passed frontend, backend, and Cypress. Phase 2 is draft [PR #9](https://github.com/676767-with-friend/Boardly-web/pull/9), targeting the Phase 1 branch.
-- Current implementation commit: `8ca9dc8830b50495e3f0cd826ff0e07fcefcac8b` (batch 3); previous implementation commits: `db0dab2e5b1b3be00957400099bd938209120fc2`, `4b2a300ab6d7e3264685317a89d28c16a17ade2e`.
+- Earlier implementation commits: `db0dab2e5b1b3be00957400099bd938209120fc2`, `4b2a300ab6d7e3264685317a89d28c16a17ade2e`, and `8ca9dc8830b50495e3f0cd826ff0e07fcefcac8b`.
 
 ## Continuation from verified checkpoint
 
 - The previous Phase 2 head `75866cfeda645bc6bbcaa57312109732b31cda65` passed all three jobs in [PR #9 CI run #48](https://github.com/676767-with-friend/Boardly-web/actions/runs/42958784133). The work below continues from that commit; Phase 1 remains unmerged.
-- Current implementation commit: `6ef026ffb634301728e9bdd18ff4e8d548bd62d7` (batch 4). It has focused local verification; GitHub CI is pending.
+- Current implementation commit: `1966dfc10b1732598086e8b2d765ece700841321` (batch 5); previous implementation commit `6ef026ffb634301728e9bdd18ff4e8d548bd62d7` (batch 4). GitHub CI is pending for these commits.
 - This is a **Phase 2 checkpoint**, with broader page cleanup and legacy test coverage triage still open.
 
 ### Batch 4 — reservation floor plan
@@ -18,14 +18,26 @@
 
 Verification at `6ef026f`: local focused Vitest run passed (13/13 tests across the new component and existing reservation page suite); local Vite production build passed; `git diff --check` passed. GitHub frontend, backend, and Cypress checks have not yet run for this commit.
 
-Next unit: review the three historical `Tests/*.yaml` manifests and the standalone `Tests/AdminOperationsApiTests.java` against active deployment paths and Maven coverage. Remove only proven obsolete manifests; retain unique Java coverage for deliberate triage.
+### Batch 5 — obsolete legacy manifests
+
+Removed `Tests/10-postgres.yaml`, `Tests/20-backend.yaml`, and `Tests/30-frontend.yaml`. They conflicted with the canonical `k8s/` resources, while the workflow, deployment script, Compose, Dockerfiles, and documented deployment commands use only `k8s/`. Updated `README.md` and `Tests/README.md` accordingly. No deployed resources, schema, or runtime configuration changed. Git history retains the removed examples.
+
+Kept `Tests/AdminOperationsApiTests.java`: it is outside Maven's test tree and overlaps the active `ManagementAdminApiTests`, `ManagementApiTests`, and customer self-service suites, but exact coverage has not been fully reconciled. It must not be counted as passing CI coverage. Decide whether to migrate any unique assertions in a future focused batch.
+
+Verification at `1966dfc`: repository reference search confirmed no active path uses `Tests/*.yaml`; `git diff --check` passed. No local runtime test was needed for deletion of inactive examples. GitHub CI for the final implementation commit is pending.
+
+## Remaining cleanup and resume steps
+
+This is still a bounded Phase 2 checkpoint. In priority order: (1) verify all three PR checks for the latest implementation and documentation heads; (2) compare the standalone Java test's assertions with active Maven suites and migrate only unique coverage; (3) select another cohesive component or logic boundary in a large frontend page if the benefit justifies the change; (4) review the notification schema/migration compatibility separately before any database edit.
+
+Resume with `git switch chore/phase2-maintainability`, `git status --short --branch`, and `git log -5 --oneline`. Read this file and inspect draft PR #9 targeting `chore/phase1-verified-ci-baseline`. For each new implementation batch, run its focused tests, commit task files, update this handoff with the commit and results, push, and check the PR's Frontend, Backend, and Cypress jobs. Keep release manual-only; do not merge, publish, or deploy.
 
 ## Prioritized plan and checkpoints
 
 1. Consolidate duplicate live-table status styling without changing rendered classes. **Done in batch 1.**
 2. Simplify cart response media lookup while retaining primary-image and first-image fallback. **Done in batch 2.**
 3. Remove the empty root npm lockfile after confirming all setup paths use the frontend pnpm lockfile. **Done in batch 3.**
-4. Evaluate larger frontend page splits and legacy `Tests/` files separately. Do not change the schema or migration without an upgrade-path review.
+4. Extract a cohesive reservation UI component and remove confirmed obsolete `Tests/` manifests. **Done in batches 4 and 5.** Do not change the schema or migration without an upgrade-path review.
 
 ### Batch 1 — `db0dab2`
 
@@ -47,14 +59,10 @@ Verification: reference search and `git diff --check` passed. No package install
 
 ## Observed Phase 2 verification
 
-At implementation head `69c655c085d62e94fa243416830e68aa6a78d32d`, [PR #9 CI run #47](https://github.com/676767-with-friend/Boardly-web/actions/runs/42958160585) completed successfully: `Frontend (build + Vitest)`, `Backend (mvn verify)`, and `E2E (Cypress)` each passed. This confirms the PR trigger works with the Phase 1 branch as base. Locally, the full Vite production build passed and Vitest coverage passed (41 test files, 226 tests). `git diff --check origin/chore/phase1-verified-ci-baseline...HEAD` passed. The final documentation update after this observation must receive its own CI check before calling the latest PR head verified.
+At implementation head `69c655c085d62e94fa243416830e68aa6a78d32d`, [PR #9 CI run #47](https://github.com/676767-with-friend/Boardly-web/actions/runs/42958160585) completed successfully: `Frontend (build + Vitest)`, `Backend (mvn verify)`, and `E2E (Cypress)` each passed. The subsequent documentation-only head `75866cfeda645bc6bbcaa57312109732b31cda65` also passed all three jobs in [run #48](https://github.com/676767-with-friend/Boardly-web/actions/runs/42958784133). This confirms the PR trigger works with the Phase 1 branch as base. Locally, the full Vite production build passed and Vitest coverage passed (41 test files, 226 tests). `git diff --check origin/chore/phase1-verified-ci-baseline...HEAD` passed at that checkpoint.
 
 ## Known limits and existing issues
 
 - Maven is not installed locally and Docker Desktop's daemon was unavailable in Phase 1; backend and Cypress will need GitHub Actions unless this environment changes.
 - Phase 1 documents a pre-existing disabled auth logout test. This refactor does not change auth behavior.
 - Image publication and Minikube deployment remain manual-only and unverified.
-
-## Resume
-
-From this repository, run `git switch chore/phase2-maintainability` and `git status --short --branch`. Read this file and `PHASE1_HANDOFF.md`. Check the latest [PR #9](https://github.com/676767-with-friend/Boardly-web/pull/9) CI run for the documentation-only head commit; if all three jobs pass, this is a verified checkpoint. For further work, choose the next pending item above, run focused checks, commit only task files, update this handoff with the implementation commit and actual results, and push. Keep the PR draft and based on the Phase 1 branch until that branch merges. Recheck all three suites on any new final implementation commit. Do not merge or dispatch release.
