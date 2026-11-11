@@ -26,6 +26,7 @@ import {
 
 import type { ProductCategory } from "@/types"
 import { thaiPhoneError } from "@/utils/phone"
+import { formatCurrency as money } from "@/utils/currency"
 
 const errorText = (error: unknown) =>
   typeof error === "object" && error && "message" in error
@@ -34,13 +35,6 @@ const errorText = (error: unknown) =>
 
 const input =
   "w-full border border-[#D2D2D7] rounded-xl bg-white px-3 py-2.5 text-sm outline-none focus:border-[#0071E3]"
-
-const money = (value: number) =>
-  new Intl.NumberFormat("en-TH", {
-    style: "currency",
-    currency: "THB",
-    maximumFractionDigits: 0,
-  }).format(value)
 
 const shortDate = (value: string | null) =>
   value

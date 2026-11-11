@@ -432,7 +432,19 @@ public class ManagementService {
                 user.getLastLoginAt(),
                 activeRoles);
     }
-    private BranchResponse branch(Branch branch) { OffsetDateTime now = OffsetDateTime.now(); OffsetDateTime dayStart = now.withOffsetSameInstant(ZoneOffset.UTC).toLocalDate().atStartOfDay().atOffset(ZoneOffset.UTC); long staffCount = assignments.findAllByOrderByAssignedAtDesc().stream().filter(item -> item.getBranch().getId().equals(branch.getId())).map(item -> item.getUser().getId()).distinct().count(); return new BranchResponse(branch.getId(), branch.getCode(), branch.getName(), branch.getAddressLine1(), branch.getDistrict(), branch.getProvince(), branch.getPostalCode(), branch.getPhone(), branch.getStatus().name(), branch.isAllowReservations(), tables.countByBranchIdAndIsActiveTrue(branch.getId()), staffCount, reservations.countByBranchIdAndStartsAtBetween(branch.getId(), dayStart, dayStart.plusDays(1))); }
+    private BranchResponse branch(Branch branch) {
+        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime dayStart = now.withOffsetSameInstant(ZoneOffset.UTC).toLocalDate()
+                .atStartOfDay().atOffset(ZoneOffset.UTC);
+        long staffCount = assignments.findAllByOrderByAssignedAtDesc().stream()
+                .filter(item -> item.getBranch().getId().equals(branch.getId()))
+                .map(item -> item.getUser().getId()).distinct().count();
+        return new BranchResponse(branch.getId(), branch.getCode(), branch.getName(),
+                branch.getAddressLine1(), branch.getDistrict(), branch.getProvince(),
+                branch.getPostalCode(), branch.getPhone(), branch.getStatus().name(),
+                branch.isAllowReservations(), tables.countByBranchIdAndIsActiveTrue(branch.getId()),
+                staffCount, reservations.countByBranchIdAndStartsAtBetween(branch.getId(), dayStart, dayStart.plusDays(1)));
+    }
     private ProductManagementResponse product(Product product) { long stock = inventory.availableStockByProductId(product.getId()); return new ProductManagementResponse(product.getId(), product.getSku(), product.getName(), product.getCategory().getId(), product.getCategory().getName(), product.getBasePrice(), product.getSalePrice(), product.getMinPlayers(), product.getMaxPlayers(), product.getMinPlayTimeMinutes(), product.getMaxPlayTimeMinutes(), product.getMinAge(), product.getDifficulty().name(), product.getDescription(), product.isActive(), stock); }
     private InventoryResponse inventory(BranchProductInventory item) { return new InventoryResponse(item.getBranch().getId(), item.getBranch().getName(), item.getProduct().getId(), item.getProduct().getName(), item.getProduct().getSku(), item.getQuantityOnHand(), item.getReservedQuantity(), item.getQuantityOnHand() - item.getReservedQuantity(), item.getLowStockThreshold()); }
 
@@ -455,10 +467,43 @@ public class ManagementService {
     private void applyBranch(Branch branch, BranchRequest request) { branch.setCode(request.code().trim().toUpperCase(Locale.ROOT)); branch.setName(request.name().trim()); branch.setAddressLine1(request.address().trim()); branch.setDistrict(request.district().trim()); branch.setProvince(blankToNull(request.province())); branch.setPostalCode(blankToNull(request.postalCode())); branch.setPhone(PhoneNumbers.normalize(request.phone())); branch.setStatus(enumValue(Branch.BranchStatus.class, request.status(), "Branch status")); branch.setAllowReservations(request.allowReservations()); branch.setUpdatedAt(OffsetDateTime.now()); }
     private void applyProduct(Product product, ProductManagementRequest request) { if (request.maxPlayers() < request.minPlayers()) throw badRequest("Maximum players must be at least minimum players"); if (request.salePrice() != null && request.salePrice().compareTo(request.basePrice()) > 0) throw badRequest("Sale price cannot exceed base price"); product.setSku(request.sku().trim().toUpperCase(Locale.ROOT)); product.setName(request.name().trim()); product.setCategory(categories.findById(request.categoryId()).orElseThrow(() -> notFound("Product category"))); product.setBasePrice(request.basePrice()); product.setSalePrice(request.salePrice()); product.setMinPlayers(request.minPlayers()); product.setMaxPlayers(request.maxPlayers()); product.setMinPlayTimeMinutes(request.minPlayTimeMinutes()); product.setMaxPlayTimeMinutes(request.maxPlayTimeMinutes()); product.setMinAge(request.minAge()); product.setDifficulty(enumValue(Product.ProductDifficulty.class, request.difficulty(), "Product difficulty")); product.setDescription(blankToNull(request.description())); product.setActive(request.active()); product.setUpdatedAt(OffsetDateTime.now()); }
     private void assignRole(User user, String code, UUID assignedBy, OffsetDateTime now) { Role role = roles.findByCodeAndIsActiveTrue(code).orElseThrow(() -> new IllegalStateException("Required role is not configured")); UserRole userRole = new UserRole(); userRole.setId(new UserRoleId(user.getId(), role.getId())); userRole.setUser(user); userRole.setRole(role); userRole.setAssignedAt(now); userRole.setAssignedBy(assignedBy); userRoles.save(userRole); }
-    private void replaceAssignments(User user, List<UUID> branchIds, UUID primaryBranchId, UUID assignedBy, OffsetDateTime now) { assignments.deleteAllByUserId(user.getId()); for (UUID branchId : new LinkedHashSet<>(branchIds)) { StaffBranchAssignment assignment = new StaffBranchAssignment(); assignment.setId(new StaffBranchAssignmentId(user.getId(), branchId)); assignment.setUser(user); assignment.setBranch(requiredBranch(branchId)); assignment.setAssignedAt(now); assignment.setAssignedBy(assignedBy); assignment.setPrimary(branchId.equals(primaryBranchId)); assignments.save(assignment); } }
-    private void validateBranches(List<UUID> branchIds, UUID primaryBranchId) { if (!branchIds.contains(primaryBranchId)) throw badRequest("Primary branch must be one of the assigned branches"); for (UUID branchId : new LinkedHashSet<>(branchIds)) requiredBranch(branchId); }
+    private void replaceAssignments(User user, List<UUID> branchIds, UUID primaryBranchId,
+            UUID assignedBy, OffsetDateTime now) {
+        assignments.deleteAllByUserId(user.getId());
+        for (UUID branchId : new LinkedHashSet<>(branchIds)) {
+            StaffBranchAssignment assignment = new StaffBranchAssignment();
+            assignment.setId(new StaffBranchAssignmentId(user.getId(), branchId));
+            assignment.setUser(user);
+            assignment.setBranch(requiredBranch(branchId));
+            assignment.setAssignedAt(now);
+            assignment.setAssignedBy(assignedBy);
+            assignment.setPrimary(branchId.equals(primaryBranchId));
+            assignments.save(assignment);
+        }
+    }
+    private void validateBranches(List<UUID> branchIds, UUID primaryBranchId) {
+        if (!branchIds.contains(primaryBranchId)) {
+            throw badRequest("Primary branch must be one of the assigned branches");
+        }
+        for (UUID branchId : new LinkedHashSet<>(branchIds)) {
+            requiredBranch(branchId);
+        }
+    }
     private Branch staffBranch(AuthUser principal) { List<UUID> ids = branchIds(principal); return requiredBranch(ids.getFirst()); }
-    private List<UUID> branchIds(AuthUser principal) { if (principal.roles().contains("admin")) { return branches.findAll().stream().filter(branch -> branch.getStatus() == Branch.BranchStatus.active).map(Branch::getId).toList(); } List<UUID> ids = assignments.findByUserIdOrderByIsPrimaryDescAssignedAtAsc(principal.id()).stream().map(item -> item.getBranch().getId()).toList(); if (ids.isEmpty()) throw new BoardlyException("No branch assignment is configured for this staff account", HttpStatus.FORBIDDEN.value(), "BRANCH_ACCESS_DENIED"); return ids; }
+    private List<UUID> branchIds(AuthUser principal) {
+        if (principal.roles().contains("admin")) {
+            return branches.findAll().stream()
+                    .filter(branch -> branch.getStatus() == Branch.BranchStatus.active)
+                    .map(Branch::getId).toList();
+        }
+        List<UUID> ids = assignments.findByUserIdOrderByIsPrimaryDescAssignedAtAsc(principal.id()).stream()
+                .map(item -> item.getBranch().getId()).toList();
+        if (ids.isEmpty()) {
+            throw new BoardlyException("No branch assignment is configured for this staff account",
+                    HttpStatus.FORBIDDEN.value(), "BRANCH_ACCESS_DENIED");
+        }
+        return ids;
+    }
     private void requireBranchScope(AuthUser principal, UUID branchId) { if (!branchIds(principal).contains(branchId)) throw new BoardlyException("You are not assigned to this branch", HttpStatus.FORBIDDEN.value(), "BRANCH_ACCESS_DENIED"); }
     private User requiredUser(UUID id) { return users.findById(id).orElseThrow(() -> notFound("User")); }
     private Branch requiredBranch(UUID id) { return branches.findById(id).orElseThrow(() -> notFound("Branch")); }

@@ -40,10 +40,11 @@ Demo accounts are defined in `database/seed-dev.sql` and are intended only for i
 
 ## Development Setup
 
-Start PostgreSQL:
+Start PostgreSQL and apply the notification migration:
 
 ```powershell
 docker compose up -d db
+docker compose run --rm db-migrate
 ```
 
 Start the backend:
@@ -67,6 +68,9 @@ corepack pnpm dev
 ```
 
 The frontend runs on `http://localhost:8443` and proxies `/api` to the backend on port `8080`.
+The environment examples use these local ports and the same `/api` proxy. Set the backend example's placeholder password to `boardly` only for the local Compose database; use separate credentials for any other database.
+
+On a fresh Compose database, `database/Boardly_schema.sql` creates the notification table. The migration in `database/migrations/001-create-notifications.sql` adds it to an older database that does not have the table. Both paths are retained. The migration's `IF NOT EXISTS` clauses do not repair an existing table with a different structure; that case requires a separately reviewed data migration. Do not delete the Compose volume to resolve a schema mismatch.
 
 ## Testing
 
@@ -100,7 +104,7 @@ corepack pnpm exec cypress run
 
 ## CI/CD
 
-- `.github/workflows/ci.yml` validates pushes and pull requests targeting `main`. Its existing check names remain `Frontend (build + Vitest)`, `Backend (mvn verify)`, and `E2E (Cypress)`. It builds the frontend, runs Vitest with coverage, builds/tests the backend against an isolated PostgreSQL service, and runs Cypress against a Compose stack. Test reports, coverage, Cypress screenshots/videos, and failure logs are uploaded when available. Pull requests need no registry or deployment credentials.
+- `.github/workflows/ci.yml` validates pushes and pull requests targeting `main`; it also retains the Phase 1 branch as an accepted pull-request target. Its existing check names remain `Frontend (build + Vitest)`, `Backend (mvn verify)`, and `E2E (Cypress)`. It builds the frontend, runs Vitest with coverage, builds/tests the backend against an isolated PostgreSQL service, and runs Cypress against a Compose stack. Test reports, coverage, Cypress screenshots/videos, and failure logs are uploaded when available. Pull requests need no registry or deployment credentials.
 - `.github/workflows/release.yml` runs only when a maintainer explicitly starts **Publish and deploy** with **Run workflow** on `main` in the Actions tab. It refuses publication unless the exact `main` commit has a successful push-triggered `CI` run with all three named jobs passing. It then builds and pushes both Docker images to the existing configured registry, tagged with that commit SHA, and deploys those tags to Minikube with in-cluster HTTP smoke checks. A run requested on another ref skips publication. No release has been run or verified.
 - The connected Vercel frontend project also has automatic Git deployments disabled by `frontend/vercel.json`. Git pushes and merges do not deploy through that integration; a separate manual Vercel deployment remains possible.
 - `backend/Dockerfile`, `frontend/Dockerfile`, and `compose.yaml` build the local application images and runtime stack.
@@ -111,7 +115,7 @@ The deployment job requires an **authorized Linux self-hosted GitHub Actions run
 
 ## Local Kubernetes Deployment
 
-Use only the canonical manifests in `k8s/`. The manifests in `Tests/` are legacy artifacts and must not be applied alongside them.
+Use the canonical manifests in `k8s/`. The obsolete, conflicting copies previously stored in `Tests/` were removed; Git history retains them.
 
 First confirm that the active context is a disposable local cluster. Build and load local images:
 

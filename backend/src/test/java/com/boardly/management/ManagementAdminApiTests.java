@@ -4,6 +4,9 @@ import com.boardly.branch.BranchOperatingHour;
 import com.boardly.branch.BranchOperatingHourRepository;
 import com.boardly.branch.BranchRepository;
 import com.boardly.branch.TableZoneRepository;
+import com.boardly.order.FulfillmentMethod;
+import com.boardly.order.FulfillmentMethodRepository;
+import com.boardly.order.PaymentMethodRepository;
 import com.boardly.product.ProductRepository;
 import com.boardly.user.Role;
 import com.boardly.user.RoleRepository;
@@ -76,6 +79,8 @@ class ManagementAdminApiTests {
     @Autowired UserRoleRepository userRoles;
     @Autowired StaffBranchAssignmentRepository assignments;
     @Autowired BranchRepository branches;
+    @Autowired FulfillmentMethodRepository fulfillmentMethods;
+    @Autowired PaymentMethodRepository paymentMethods;
     @Autowired ProductRepository products;
     @Autowired PasswordEncoder passwordEncoder;
     @Autowired TableZoneRepository zones;
@@ -376,6 +381,13 @@ class ManagementAdminApiTests {
                 productBody(sku.toUpperCase(), "Duplicate", STRATEGY, 1000, null, 2, 4, "medium"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CONFLICT"));
         assertEquals(1, products.findAll().stream().filter(product -> product.getSku().equalsIgnoreCase(sku)).count());
+
+        postAs(admin.token(), "/api/admin/inventory",
+                json("branchId", CENTRAL, "productId", id, "quantityOnHand", 5, "lowStockThreshold", 1))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.quantityOnHand").value(5));
+        getAs(admin.token(), "/api/admin/inventory?branchId=" + CENTRAL)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.productId == '" + id + "')].quantityOnHand").value(5));
     }
 
     @Test
@@ -440,16 +452,30 @@ class ManagementAdminApiTests {
         Account admin = account("admin", null);
         Account centralStaff = account("staff", CENTRAL);
         Account silomManager = account("manager", SILOM);
+        Account buyer = account("customer", null);
+        postAs(buyer.token(), "/api/cart/items", json("productId", WINGSPAN, "quantity", 1))
+                .andExpect(status().isCreated());
+        UUID pickupMethodId = fulfillmentMethods.findByIsActiveTrueOrderByNameAsc().stream()
+                .filter(FulfillmentMethod::isStorePickup).findFirst().orElseThrow().getId();
+        UUID paymentMethodId = paymentMethods.findByIsActiveTrueOrderByNameAsc().getFirst().getId();
+        String orderNumber = body(postAs(buyer.token(), "/api/checkout",
+                json("contactFirstName", "Management", "contactLastName", "Test",
+                        "contactEmail", buyer.email(), "fulfillmentMethodId", pickupMethodId,
+                        "pickupBranchId", CENTRAL, "paymentMethodId", paymentMethodId))
+                .andExpect(status().isOk())).path("orderNumber").asText();
 
         JsonNode centralOrders = body(getAs(centralStaff.token(), "/api/staff/orders").andExpect(status().isOk()));
+        assertNotNull(find(centralOrders, "orderNumber", orderNumber));
         for (JsonNode order : centralOrders) {
             assertEquals("Central Branch", order.path("pickupBranchName").asText());
         }
         JsonNode silomOrders = body(getAs(silomManager.token(), "/api/staff/orders").andExpect(status().isOk()));
+        assertNull(find(silomOrders, "orderNumber", orderNumber));
         for (JsonNode order : silomOrders) {
             assertEquals("Silom Branch", order.path("pickupBranchName").asText());
         }
         JsonNode allOrders = body(getAs(admin.token(), "/api/admin/orders").andExpect(status().isOk()));
+        assertNotNull(find(allOrders, "orderNumber", orderNumber));
         assertTrue(allOrders.size() >= centralOrders.size());
         assertTrue(allOrders.size() >= silomOrders.size());
 

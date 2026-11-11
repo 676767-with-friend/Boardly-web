@@ -4,10 +4,10 @@ import { Btn } from '@/components/ui'
 import { staffApi, type Dashboard, type InventoryItem, type OrderSummary, type StaffBranch, type UserSummary } from '@/services/managementApi'
 import { productsApi } from '@/services/productsApi'
 import type { Product } from '@/types'
+import { formatCurrency as money } from '@/utils/currency'
 
 export type ProductMediaMap = Record<string, Pick<Product, 'image' | 'category' | 'price' | 'salePrice'>>
 
-const money = (value: number, currency = 'THB') => new Intl.NumberFormat('en-TH', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value)
 const date = (value: string) => new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeZone: 'Asia/Bangkok' }).format(new Date(value))
 const errorText = (error: unknown) => typeof error === 'object' && error && 'message' in error ? String(error.message) : 'Unable to load this information.'
 
