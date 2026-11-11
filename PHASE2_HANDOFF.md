@@ -9,23 +9,22 @@
 ## Continuation from verified checkpoint
 
 - The previous Phase 2 head `75866cfeda645bc6bbcaa57312109732b31cda65` passed all three jobs in [PR #9 CI run #48](https://github.com/676767-with-friend/Boardly-web/actions/runs/42958784133). The work below continues from that commit; Phase 1 remains unmerged.
-- Current implementation commit: `03522e623430d3273e489e5515d630af1331c497` (batch 6), awaiting CI. Previous implementation commits: `6ef026ffb634301728e9bdd18ff4e8d548bd62d7` and `1966dfc10b1732598086e8b2d765ece700841321`. [PR #9 CI run #49](https://github.com/676767-with-friend/Boardly-web/actions/runs/42966523985) passed Frontend, Backend, and Cypress on the prior combined implementation head `e288c0556e6c053a8663e48e465e1272cf91f11a`; the later documentation-only head also passed [run #50](https://github.com/676767-with-friend/Boardly-web/actions/runs/42967178511).
-- The legacy Java test was reconciled in `03522e623430d3273e489e5515d630af1331c497`; GitHub verification is pending. Subsequent implementation commits are `3d9a701196c9b5bafd50ded99f4047eaec692851` (batch 7) and `3506d0a72adb9f54365552799a1313fe0865c295` (batch 8).
-- This remains a Phase 2 checkpoint while final code review and system verification are in progress.
+- Earlier implementation commits `6ef026ffb634301728e9bdd18ff4e8d548bd62d7` and `1966dfc10b1732598086e8b2d765ece700841321` passed all three jobs in [PR #9 CI run #49](https://github.com/676767-with-friend/Boardly-web/actions/runs/42966523985); the documentation head passed [run #50](https://github.com/676767-with-friend/Boardly-web/actions/runs/42967178511).
+- The final Phase 2 implementation commits are `03522e623430d3273e489e5515d630af1331c497` (legacy Java test reconciliation), `3d9a701196c9b5bafd50ded99f4047eaec692851` (shared currency formatting), and `3506d0a72adb9f54365552799a1313fe0865c295` (management branch readability). The combined head passed all three jobs in [PR #9 CI run #52](https://github.com/676767-with-friend/Boardly-web/actions/runs/42997935362). Run #51 was cancelled by the workflow's concurrency rule after a newer push; it was not a test failure.
 
 ### Batch 6 — legacy Java test reconciliation
 
 The ten scenarios in the standalone `Tests/AdminOperationsApiTests.java` were mapped to active Maven coverage. Branch create/update and manager denial map to `ManagementAdminApiTests` branch cases; product create/update and validation map to its product cases; user status and manager denial map to its user cases; staff search and reassignment map to its staff cases; customer reservation and order lookup map to `MyReservationsApiTests` and `CartCheckoutApiTests`. The active `GlobalInventoryApiTests` covers stock addition, but did not follow a newly created product. The active staff order test covered branch scope using existing orders, but did not assert visibility of a fresh checkout. Those two gaps were added to `ManagementAdminApiTests` with response and branch-scope assertions. Existing active tests also cover authorization, validation, and database effects more thoroughly than the legacy file.
 
-The standalone file and its now-empty `Tests/README.md` were removed; the active tests are transactional and use isolated CI data. No application code or behavior changed in this batch. `git diff --check` passed. Maven is absent locally, so the changed tests have **not yet run**; GitHub CI is required. No legacy assertion remains intentionally unresolved.
+The standalone file and its now-empty `Tests/README.md` were removed; the active tests are transactional and use isolated CI data. No application code or behavior changed in this batch. `git diff --check` passed. Maven is absent locally; the changed tests passed in the backend job of run #52. No legacy assertion remains intentionally unresolved.
 
 ### Batch 7 — shared frontend currency formatting
 
-The reservation, live-staff, staff-management, and admin pages used four identical `Intl.NumberFormat("en-TH", { style: "currency", currency, maximumFractionDigits: 0 })` implementations. All now use `frontend/src/utils/currency.ts` with the same default and per-call currency arguments; the older `fmt` utility remains unchanged because its output differs. Focused Vitest tests for the four callers and the new utility passed (36/36), and the Vite production build passed locally. No CSS, text, route, or API call changed. GitHub CI is pending.
+The reservation, live-staff, staff-management, and admin pages used four identical `Intl.NumberFormat("en-TH", { style: "currency", currency, maximumFractionDigits: 0 })` implementations. All now use `frontend/src/utils/currency.ts` with the same default and per-call currency arguments; the older `fmt` utility remains unchanged because its output differs. Focused Vitest tests for the four callers and the new utility passed (36/36), and the Vite production build passed locally. No CSS, text, route, or API call changed. The frontend job in run #52 passed.
 
 ### Batch 8 — management branch code
 
-Expanded four dense methods in `ManagementService` into readable blocks: branch response mapping, branch assignment replacement and validation, and branch-scope lookup. Conditions, query calls, iteration order, exception text/codes, timestamps, and transaction annotations are unchanged. Existing active management API tests cover branch responses, assignment updates, role restrictions, and unassigned staff. `git diff --check` passed; Maven is unavailable locally, so GitHub CI verification is pending.
+Expanded four dense methods in `ManagementService` into readable blocks: branch response mapping, branch assignment replacement and validation, and branch-scope lookup. Conditions, query calls, iteration order, exception text/codes, timestamps, and transaction annotations are unchanged. Existing active management API tests cover branch responses, assignment updates, role restrictions, and unassigned staff. `git diff --check` and the backend job in run #52 passed.
 
 ### Batch 4 — reservation floor plan
 
@@ -41,11 +40,13 @@ At the end of batch 5, `Tests/AdminOperationsApiTests.java` was kept for review.
 
 Verification at `1966dfc`: repository reference search confirmed no active path uses `Tests/*.yaml`; `git diff --check` passed. No local runtime test was needed for deletion of inactive examples. The combined implementation head passed all three GitHub jobs in run #49 above.
 
-## Remaining cleanup and resume steps
+## Final configuration review and Phase 3
 
-In priority order: (1) verify batch 6 on GitHub; (2) complete a focused frontend and backend maintainability pass; (3) document the notification schema/migration upgrade path without changing data; (4) run the full Phase 3 validation matrix and record actual results in `PHASE3_VERIFICATION.md`.
+The backend environment example now matches the local Compose host port and user; the frontend example uses the Vite/Nginx `/api` proxy. The README starts the idempotent notification migration before manual backend startup and explains that a pre-existing notification table with a different shape needs a separate reviewed migration. No schema or data changed. The base schema creates the table on fresh databases, while the migration adds it on older databases. The Dockerfiles, Compose service order, canonical Kubernetes manifests, deployment script, pinned tool versions, and manual-only release workflow were reviewed and retained.
 
-Resume with `git switch chore/phase2-maintainability`, `git status --short --branch`, and `git log -5 --oneline`. Read this file and inspect draft PR #9 targeting `chore/phase1-verified-ci-baseline`. For each new implementation batch, run its focused tests, commit task files, update this handoff with the commit and results, push, and check the PR's Frontend, Backend, and Cypress jobs. Keep release manual-only; do not merge, publish, or deploy.
+The focused frontend review found a cohesive reservation floor plan boundary and genuinely duplicated currency and table styles, now extracted. The remaining large page modules own intertwined form and request state; further splits would add indirection without a clearer independent responsibility. The backend review addressed duplicate media lookup and dense branch management code; reservation, session, checkout, inventory, and authorization logic was left intact because its active API suites already exercise critical behavior and no safe behavior-preserving simplification was identified. The original `fmt` utility formats differently and was retained. No supported dependency, API contract, database schema, or workflow was removed.
+
+Phase 2 refactoring is complete within the reviewed scope. Phase 3 application verification is recorded in `PHASE3_VERIFICATION.md`. Release publication and Minikube deployment remain separate, manual, unverified operations. To resume after this handoff, run `git switch chore/phase2-maintainability`, inspect `git status --short --branch` and draft PR #9, and confirm its latest Frontend, Backend, and Cypress jobs passed. PR #9 still depends on unmerged Phase 1 PR #8 and targets `chore/phase1-verified-ci-baseline`; preserve that base until Phase 1 is merged or retarget carefully afterward.
 
 ## Prioritized plan and checkpoints
 
@@ -75,6 +76,8 @@ Verification: reference search and `git diff --check` passed. No package install
 ## Observed Phase 2 verification
 
 At implementation head `69c655c085d62e94fa243416830e68aa6a78d32d`, [PR #9 CI run #47](https://github.com/676767-with-friend/Boardly-web/actions/runs/42958160585) completed successfully: `Frontend (build + Vitest)`, `Backend (mvn verify)`, and `E2E (Cypress)` each passed. The subsequent documentation-only head `75866cfeda645bc6bbcaa57312109732b31cda65` also passed all three jobs in [run #48](https://github.com/676767-with-friend/Boardly-web/actions/runs/42958784133). This confirms the PR trigger works with the Phase 1 branch as base. Locally, the full Vite production build passed and Vitest coverage passed (41 test files, 226 tests). `git diff --check origin/chore/phase1-verified-ci-baseline...HEAD` passed at that checkpoint.
+
+Final implementation head `5f5c21e2d46936a711c616c069efa42d370d0da1` passed all three GitHub jobs in [run #52](https://github.com/676767-with-friend/Boardly-web/actions/runs/42997935362). The local final Vite build and full Vitest coverage run passed; coverage was 86.13% statements, 80.94% branches, 83.23% functions, and 88.29% lines. See `PHASE3_VERIFICATION.md` for the final matrix and limits.
 
 ## Known limits and existing issues
 
