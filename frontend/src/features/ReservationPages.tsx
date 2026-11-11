@@ -15,37 +15,11 @@ import type { PublicBranch } from "@/types"
 import { addCalendarDays, bangkokDateString } from "@/utils/bangkokDate"
 import { branchAddress } from "@/utils/branchLocation"
 import { thaiPhoneError } from "@/utils/phone"
+import { tableStatusStyle as statusStyle } from "./tableStatusStyle"
 
 const BANGKOK_OFFSET = "+07:00"
 const inputClass =
   "w-full border border-[#D2D2D7] rounded-xl bg-white px-3.5 py-3 text-sm text-[#1D1D1F] outline-none transition-colors focus:border-[#0071E3]"
-const statusStyle = {
-  available: {
-    bg: "bg-green-50",
-    border: "border-green-300",
-    dot: "bg-green-500",
-    text: "text-green-700",
-  },
-  reserved: {
-    bg: "bg-orange-50",
-    border: "border-orange-300",
-    dot: "bg-orange-500",
-    text: "text-orange-700",
-  },
-  occupied: {
-    bg: "bg-red-50",
-    border: "border-red-300",
-    dot: "bg-red-500",
-    text: "text-red-700",
-  },
-  unavailable: {
-    bg: "bg-gray-100",
-    border: "border-gray-300",
-    dot: "bg-gray-400",
-    text: "text-gray-600",
-  },
-}
-
 function errorMessage(error: unknown, fallback: string) {
   return typeof error === "object" && error !== null && "message" in error
     ? String(error.message)

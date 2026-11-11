@@ -7,7 +7,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, chore/phase1-verified-ci-baseline]
 
 concurrency:
   group: ci-${{ github.ref }}
