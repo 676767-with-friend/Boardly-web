@@ -100,7 +100,7 @@ corepack pnpm exec cypress run
 
 ## CI/CD
 
-- `.github/workflows/ci.yml` validates pushes and pull requests targeting `main`. Its existing check names remain `Frontend (build + Vitest)`, `Backend (mvn verify)`, and `E2E (Cypress)`. It builds the frontend, runs Vitest with coverage, builds/tests the backend against an isolated PostgreSQL service, and runs Cypress against a Compose stack. Test reports, coverage, Cypress screenshots/videos, and failure logs are uploaded when available. Pull requests need no registry or deployment credentials.
+- `.github/workflows/ci.yml` validates pushes and pull requests targeting `main`; while Phase 1 PR #8 remains open, it also validates pull requests targeting `chore/phase1-verified-ci-baseline`. Its existing check names remain `Frontend (build + Vitest)`, `Backend (mvn verify)`, and `E2E (Cypress)`. It builds the frontend, runs Vitest with coverage, builds/tests the backend against an isolated PostgreSQL service, and runs Cypress against a Compose stack. Test reports, coverage, Cypress screenshots/videos, and failure logs are uploaded when available. Pull requests need no registry or deployment credentials.
 - `.github/workflows/release.yml` runs only when a maintainer explicitly starts **Publish and deploy** with **Run workflow** on `main` in the Actions tab. It refuses publication unless the exact `main` commit has a successful push-triggered `CI` run with all three named jobs passing. It then builds and pushes both Docker images to the existing configured registry, tagged with that commit SHA, and deploys those tags to Minikube with in-cluster HTTP smoke checks. A run requested on another ref skips publication. No release has been run or verified.
 - `backend/Dockerfile`, `frontend/Dockerfile`, and `compose.yaml` build the local application images and runtime stack.
 
@@ -110,7 +110,7 @@ The deployment job requires an **authorized Linux self-hosted GitHub Actions run
 
 ## Local Kubernetes Deployment
 
-Use only the canonical manifests in `k8s/`. The manifests in `Tests/` are legacy artifacts and must not be applied alongside them.
+Use the canonical manifests in `k8s/`. The obsolete, conflicting copies previously stored in `Tests/` were removed; Git history retains them.
 
 First confirm that the active context is a disposable local cluster. Build and load local images:
 
