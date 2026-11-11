@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
         - name: backend
-          # Jenkins replaces this with <registry>/boardly-backend:<build-tag> at deploy time
+          # Historical artifact; the active workflow deploys from k8s/20-backend.yaml.
           image: boardly-backend:latest
           imagePullPolicy: IfNotPresent
           ports: [{ containerPort: 8080 }]

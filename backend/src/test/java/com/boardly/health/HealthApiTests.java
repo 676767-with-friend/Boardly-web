@@ -10,7 +10,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** /api/health is what docker compose, Kubernetes probes and the Jenkins smoke test call. */
+/** /api/health is what Docker Compose, Kubernetes probes, and the deployment smoke test call. */
 @SpringBootTest
 @AutoConfigureMockMvc
 class HealthApiTests {
