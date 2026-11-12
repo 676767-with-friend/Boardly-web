@@ -23,8 +23,10 @@ kubectl --context "$KUBE_CONTEXT" get nodes
 
 on_error() {
   echo "Deployment failed for ${IMAGE_TAG}; Kubernetes status:" >&2
+  echo "Deployment failed for ${IMAGE_TAG}" >> "$GITHUB_STEP_SUMMARY"
   kubectl -n "$KUBE_NAMESPACE" get pods,deploy,jobs -o wide >&2 || true
   kubectl -n "$KUBE_NAMESPACE" logs job/boardly-db-migrate --tail=80 >&2 || true
+  kubectl -n "$KUBE_NAMESPACE" get events --sort-by=.lastTimestamp | tail -n 20 >&2 || true
 }
 trap on_error ERR
 
