@@ -11,11 +11,22 @@ fi
 
 KUBE_NAMESPACE=boardly
 KUBE_CONTEXT=minikube
+command -v minikube >/dev/null || { echo 'Refusing deployment: Minikube CLI is missing' >&2; exit 1; }
+command -v timeout >/dev/null || { echo 'Refusing deployment: timeout command is missing' >&2; exit 1; }
 current_context=$(kubectl config current-context)
 if [[ "$current_context" != "$KUBE_CONTEXT" ]]; then
   echo "Refusing deployment: expected Kubernetes context $KUBE_CONTEXT, found $current_context" >&2
   exit 1
 fi
+minikube -p "$KUBE_CONTEXT" status
+kubectl --context "$KUBE_CONTEXT" get nodes
+
+on_error() {
+  echo "Deployment failed for ${IMAGE_TAG}; Kubernetes status:" >&2
+  kubectl -n "$KUBE_NAMESPACE" get pods,deploy,jobs -o wide >&2 || true
+  kubectl -n "$KUBE_NAMESPACE" logs job/boardly-db-migrate --tail=80 >&2 || true
+}
+trap on_error ERR
 
 kubectl apply -f k8s/00-namespace.yaml
 
@@ -57,8 +68,14 @@ kubectl -n "$KUBE_NAMESPACE" set image deployment/boardly-frontend frontend="${I
 kubectl -n "$KUBE_NAMESPACE" rollout status deployment/boardly-backend --timeout=180s
 kubectl -n "$KUBE_NAMESPACE" rollout status deployment/boardly-frontend --timeout=120s
 
-kubectl -n "$KUBE_NAMESPACE" run "smoke-test-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --rm -i --restart=Never \
+timeout 150s kubectl -n "$KUBE_NAMESPACE" run "smoke-test-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --rm -i --restart=Never --pod-running-timeout=90s \
   --image=curlimages/curl:8.12.1 --command -- sh -ec \
-  'curl --fail --silent --show-error http://backend:8080/api/health; \
-   curl --fail --silent --show-error --output /dev/null http://frontend/; \
-   curl --fail --silent --show-error http://frontend/api/health'
+  'curl --fail --silent --show-error --max-time 15 http://backend:8080/api/health; \
+   curl --fail --silent --show-error --max-time 15 --output /dev/null http://frontend/; \
+   curl --fail --silent --show-error --max-time 15 http://frontend/api/health'
+
+backend_image=$(kubectl -n "$KUBE_NAMESPACE" get deployment boardly-backend -o jsonpath='{.spec.template.spec.containers[0].image}')
+frontend_image=$(kubectl -n "$KUBE_NAMESPACE" get deployment boardly-frontend -o jsonpath='{.spec.template.spec.containers[0].image}')
+[[ "$backend_image" == "${IMAGE_REGISTRY}/boardly-backend:${IMAGE_TAG}" ]]
+[[ "$frontend_image" == "${IMAGE_REGISTRY}/boardly-frontend:${IMAGE_TAG}" ]]
+echo "Deployed and smoke-tested ${IMAGE_TAG}" | tee -a "$GITHUB_STEP_SUMMARY"
