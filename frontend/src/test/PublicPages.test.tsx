@@ -135,6 +135,14 @@ describe("Public Pages Test Suite", () => {
     ).toBeInTheDocument()
 
     expect(screen.getByText("Popular right now")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Shop Board Games" }))
+    fireEvent.click(screen.getAllByRole("button", { name: "Reserve a Table" })[0])
+    fireEvent.click(screen.getByRole("button", { name: /Strategy/ }))
+    fireEvent.click(screen.getAllByRole("button", { name: "View all" })[0])
+    fireEvent.click(screen.getByRole("button", { name: "Visit Store Info" }))
+    fireEvent.click(screen.getAllByRole("button", { name: "Reserve a Table" })[1])
+    fireEvent.click(screen.getAllByRole("button", { name: "Add to Cart" })[0])
+    fireEvent.click(screen.getAllByRole("button", { name: "View all" })[1])
   })
 
   it("renders PublicShopPage and loads products", async () => {
@@ -145,6 +153,13 @@ describe("Public Pages Test Suite", () => {
     )
 
     expect(await screen.findByText("Board Games")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Strategy" }))
+    fireEvent.click(screen.getByRole("button", { name: "Strategy" }))
+    fireEvent.click(screen.getByRole("button", { name: "All Games" }))
+    fireEvent.click(screen.getByRole("button", { name: "Medium" }))
+    fireEvent.click(screen.getByRole("button", { name: "Medium" }))
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "Newest" } })
+    fireEvent.change(screen.getByRole("slider"), { target: { value: "3000" } })
   })
 
   it("renders PublicProductPage details correctly", async () => {
@@ -152,6 +167,7 @@ describe("Public Pages Test Suite", () => {
       <MemoryRouter initialEntries={["/products/p1"]}>
         <Routes>
           <Route path="/products/:productId" element={<PublicProductPage />} />
+          <Route path="/cart" element={<h1>Cart</h1>} />
         </Routes>
       </MemoryRouter>,
     )
@@ -163,6 +179,8 @@ describe("Public Pages Test Suite", () => {
     expect(catanElements.length).toBeGreaterThan(0)
 
     expect(screen.getByText("Great game")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "-" }))
+    fireEvent.click(screen.getByRole("button", { name: "View Cart" }))
   })
 
   it("shows the selected branch full address and a corresponding map link", async () => {
@@ -199,6 +217,7 @@ describe("Public Pages Test Suite", () => {
     expect(
       await screen.findByText("2 Silom Road, Bang Rak, Bangkok, 10500"),
     ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Shop Board Games" }))
   })
 
   it("shows home loading failures and empty catalog states", async () => {
@@ -451,5 +470,62 @@ describe("Public Pages Test Suite", () => {
       screen.getByRole("button", { name: "Reserve a Table at Central Branch" }),
     )
     expect(onReserve).toHaveBeenCalledWith("central")
+  })
+
+  it("renders empty shop results and clears category, difficulty, and price filters", async () => {
+    vi.mocked(productsApi.list).mockResolvedValue({ content: [] } as never)
+    render(
+      <MemoryRouter>
+        <PublicShopPage />
+      </MemoryRouter>,
+    )
+    expect(await screen.findByText("No games match your filters")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }))
+    await waitFor(() =>
+      expect(productsApi.list).toHaveBeenLastCalledWith(
+        expect.objectContaining({ category: undefined, difficulty: undefined, maxPrice: 5000 }),
+      ),
+    )
+  })
+
+  it("shows product list errors and renders inactive branch fallbacks", async () => {
+    vi.mocked(productsApi.list).mockRejectedValueOnce({})
+    const shopFailure = render(
+      <MemoryRouter>
+        <PublicShopPage />
+      </MemoryRouter>,
+    )
+    expect(await screen.findByText("Unable to load products right now.")).toBeInTheDocument()
+    shopFailure.unmount()
+
+    vi.mocked(branchesApi.get).mockResolvedValueOnce({
+      id: "silom", code: "SILOM", name: "Silom Branch", address: "2 Silom Road",
+      district: "Bang Rak", province: "Bangkok", postalCode: "10500", phone: null,
+      status: "inactive", allowReservations: false, hours: "Closed", tableCount: 0,
+      playableGameCount: 0, operatingHours: [{ dayOfWeek: 9, closed: false, openTime: null, closeTime: null }],
+      amenities: [], rules: [],
+    } as never)
+    vi.mocked(branchesApi.games).mockResolvedValueOnce([])
+    const onReserve = vi.fn()
+    render(
+      <MemoryRouter>
+        <PublicVisitStorePage onReserve={onReserve} />
+      </MemoryRouter>,
+    )
+    fireEvent.click(await screen.findByRole("button", { name: /Search or select a branch/i }))
+    fireEvent.click(screen.getByRole("option", { name: /Silom Branch/i }))
+    expect(await screen.findByText("Closed", { selector: "span" })).toBeInTheDocument()
+    expect(screen.getByText("No amenities listed.")).toBeInTheDocument()
+    expect(screen.getByText("No rules listed.")).toBeInTheDocument()
+    expect(screen.getByText("No playable games listed.")).toBeInTheDocument()
+    expect(screen.getByText("Day")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Reserve a Table at Silom Branch" })).toBeDisabled()
+    expect(onReserve).not.toHaveBeenCalled()
+  })
+
+  it("reports category errors in the shop", async () => {
+    vi.mocked(productsApi.categories).mockRejectedValueOnce(new Error("Categories offline"))
+    render(<MemoryRouter><PublicShopPage /></MemoryRouter>)
+    expect(await screen.findByText("Categories offline")).toBeInTheDocument()
   })
 })
