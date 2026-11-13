@@ -21,7 +21,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.OffsetDateTime;
 import java.util.UUID;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -135,15 +134,12 @@ class AuthSessionApiTests {
     }
 
     /**
-     * KNOWN BUG: AuthController.logout passes AuthUser.id() (the USER id) to
-     * AuthService.logout, which looks it up with authSessionRepository.findById(...)
-     * (a SESSION id). They never match, so a logout that carries only the access
-     * token does not revoke the session. Today it only works because the frontend
-     * also sends the refresh token in the body. Enable this test once the session
-     * id from the access token is passed to AuthService.logout.
+     * Regression test: AuthController.logout used to pass AuthUser.id() (the USER id)
+     * to AuthService.logout, which looks sessions up by SESSION id, so a logout that
+     * carried only the access token never revoked the session. The controller now
+     * passes the session id stored on the authentication by JwtAuthenticationFilter.
      */
     @Test
-    @Disabled("KNOWN BUG: logout with only an access token does not revoke the session (user id used as session id)")
     void logoutWithOnlyTheAccessTokenRevokesTheCurrentSession() throws Exception {
         String accessToken = register(uniqueEmail("access-only")).get("accessToken").asText();
 
