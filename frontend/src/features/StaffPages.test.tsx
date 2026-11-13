@@ -183,4 +183,48 @@ describe("staff management pages", () => {
     expect(await screen.findByText("Ada Lovelace")).toBeInTheDocument()
     expect(staffApi.users).toHaveBeenLastCalledWith("Ada")
   })
+
+  it("shows dashboard and inventory fallbacks and validates stock adjustments", async () => {
+    vi.mocked(staffApi.dashboard).mockRejectedValueOnce({})
+    const dashboard = render(<StaffDashboardPage />)
+    expect(await screen.findByText("Unable to load this information.")).toBeInTheDocument()
+    dashboard.unmount()
+
+    vi.mocked(staffApi.branches).mockResolvedValueOnce([
+      { id: "branch-1", name: "Central" },
+      { id: "branch-2", name: "North" },
+    ])
+    vi.mocked(productsApi.list).mockResolvedValueOnce({ content: [] } as never)
+    vi.mocked(staffApi.products).mockResolvedValueOnce([
+      { ...inventory, availableQuantity: 0 },
+      { ...inventory, productId: "product-2", availableQuantity: 1 },
+      { ...inventory, productId: "product-3", availableQuantity: 4 },
+    ])
+    vi.mocked(staffApi.adjustInventory).mockRejectedValueOnce({})
+    render(<StaffProductsPage />)
+    expect(await screen.findByText("Out of Stock")).toBeInTheDocument()
+    expect(screen.getByText("Low Stock")).toBeInTheDocument()
+    fireEvent.change(screen.getByDisplayValue("Central"), { target: { value: "branch-2" } })
+    await waitFor(() => expect(staffApi.products).toHaveBeenLastCalledWith("branch-2"))
+    fireEvent.click(await screen.findByRole("button", { name: "Adjust" }))
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
+    fireEvent.change(screen.getByLabelText("Quantity change"), { target: { value: "-5" } })
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
+    fireEvent.change(screen.getByLabelText("Quantity change"), { target: { value: "1" } })
+    fireEvent.click(screen.getByRole("button", { name: "Save" }))
+    expect(await screen.findByText("Unable to load this information.")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }))
+  })
+
+  it("reports failed staff inventory and customer searches", async () => {
+    vi.mocked(staffApi.branches).mockResolvedValueOnce([{ id: "branch-1", name: "Central" }])
+    vi.mocked(productsApi.list).mockRejectedValueOnce(new Error("Catalog offline"))
+    const products = render(<StaffProductsPage />)
+    expect(await screen.findByText("Catalog offline")).toBeInTheDocument()
+    products.unmount()
+
+    vi.mocked(staffApi.users).mockRejectedValueOnce({})
+    render(<StaffUsersPage />)
+    expect(await screen.findByText("Unable to load this information.")).toBeInTheDocument()
+  })
 })

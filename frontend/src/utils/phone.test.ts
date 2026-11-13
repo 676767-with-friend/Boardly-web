@@ -40,4 +40,11 @@ describe("Thai phone validation", () => {
     expect(isValidPhone("081-234-5678")).toBe(true)
     expect(isValidPhone("123")).toBe(false)
   })
+
+  it("formats short input without adding unnecessary separators", () => {
+    expect(formatPhone("08")).toBe("08")
+    expect(formatPhone("0812")).toBe("081-2")
+    expect(formatPhone("081234")).toBe("081-234")
+    expect(formatPhone("081-234-5678-999")).toBe("081-234-5678")
+  })
 })

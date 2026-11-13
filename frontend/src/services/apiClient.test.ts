@@ -65,4 +65,28 @@ describe('ApiClient', () => {
       expect.objectContaining({ message: 'Bad Request' })
     )
   })
+
+  it('falls back to a generic error when an error response is not JSON', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      json: async () => { throw new Error('not json') },
+    })
+    await expect(apiClient.get('/offline')).rejects.toMatchObject({
+      status: 503,
+      code: 'REQUEST_FAILED',
+      message: 'The request could not be completed.',
+    })
+  })
+
+  it('sends every supported write method with its JSON body', async () => {
+    mockFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ ok: true }) })
+    const body = { name: 'Boardly' }
+    await apiClient.post('/items', body)
+    await apiClient.put('/items/1', body)
+    await apiClient.patch('/items/1', body)
+    expect(mockFetch).toHaveBeenNthCalledWith(1, expect.stringContaining('/items'), expect.objectContaining({ method: 'POST', body: JSON.stringify(body) }))
+    expect(mockFetch).toHaveBeenNthCalledWith(2, expect.stringContaining('/items/1'), expect.objectContaining({ method: 'PUT', body: JSON.stringify(body) }))
+    expect(mockFetch).toHaveBeenNthCalledWith(3, expect.stringContaining('/items/1'), expect.objectContaining({ method: 'PATCH', body: JSON.stringify(body) }))
+  })
 })
