@@ -26,10 +26,10 @@ pnpm test:coverage
 
 ## Backend (PowerShell)
 
-การทดสอบ backend ต้องมี PostgreSQL ที่มี schema/seed data แล้ว เปิด stack ตาม [README](../README.md) ก่อน จากนั้นรันใน `backend/` (PowerShell):
+การทดสอบ backend ต้องใช้ PostgreSQL แยกจากข้อมูลพัฒนา ดูคำสั่งสร้างฐานข้อมูลทดสอบใน [README](../README.md) จากนั้นรันใน `backend/` (PowerShell):
 
 ```powershell
-$env:DB_URL = "jdbc:postgresql://localhost:5433/boardly_db"
+$env:DB_URL = "jdbc:postgresql://localhost:55433/boardly_db"
 $env:DB_USERNAME = "boardly"
 $env:DB_PASSWORD = "boardly"
 mvn -B clean verify

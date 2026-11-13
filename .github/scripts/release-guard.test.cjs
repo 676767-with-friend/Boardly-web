@@ -17,6 +17,8 @@ test('only successful main push CI with every required job is eligible', () => {
   assert.equal(checkCiRun(run, jobs, 1), null);
   for (const change of [
     { event: 'pull_request' }, { head_branch: 'feature' },
+    { path: '.github/workflows/other.yml' }, { head_sha: 'bad' },
+    { conclusion: 'skipped' }, { conclusion: 'timed_out' },
     { status: 'in_progress' }, { conclusion: 'failure' }, { conclusion: 'cancelled' },
     { head_repository: { id: 2 } }, { repository: { id: 2 } },
   ]) {
@@ -84,4 +86,26 @@ test('manual retry requires main and successful CI for the exact selected SHA', 
   assert.equal((await gate('workflow_dispatch', candidate)).outputs.sha, sha);
   assert.match((await gate('workflow_dispatch', candidate, sha, sha, 'refs/heads/feature')).failure, /main/);
   assert.match((await gate('workflow_dispatch', candidate, sha, 'b'.repeat(40))).failure, /No push-triggered/);
+});
+
+// Execute the final supersession check from the actual workflow, after local builds.
+test('recheck main after build prevents a queued older deployment', async () => {
+  const starts = scriptLines.map((line, index) => line.trim() === 'script: |' ? index : -1).filter(index => index >= 0);
+  const body = [];
+  for (const line of scriptLines.slice(starts[1] + 1)) {
+    if (!line.startsWith('            ')) break;
+    body.push(line.slice(12));
+  }
+  const recheck = new AsyncFunction('github', 'context', 'core', 'process', body.join('\n'));
+  for (const currentSha of [sha, 'b'.repeat(40)]) {
+    const outputs = {};
+    await recheck({ rest: { repos: { async getBranch() { return { data: { commit: { sha: currentSha } } }; } } } },
+      { repo: { owner: 'owner', repo: 'boardly' } },
+      { setOutput: (key, value) => { outputs[key] = value; }, summary: { addRaw() { return this; }, async write() {} } },
+      { env: { IMAGE_TAG: sha } });
+    assert.equal(outputs.current, currentSha === sha ? 'true' : undefined);
+  }
+  assert.ok(workflow.indexOf('deploy.sh build') < workflow.indexOf('id: current'));
+  assert.ok(workflow.indexOf('id: current') < workflow.indexOf('deploy.sh deploy'));
+  assert.ok(!workflow.includes('docker push'));
 });

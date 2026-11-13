@@ -1,4 +1,4 @@
-name: Publish and deploy
+name: Build and deploy locally
 
 on:
   workflow_run:
@@ -12,7 +12,6 @@ permissions:
 concurrency:
   group: boardly-release-minikube
   cancel-in-progress: false
-  queue: max
 
 jobs:
   gate:
@@ -88,51 +87,23 @@ jobs:
             core.setOutput('eligible', 'true')
             await core.summary.addRaw(`CI passed: ${run.html_url}; release commit: ${run.head_sha}`).write()
 
-  publish:
-    name: Publish Docker images
+  deploy:
+    name: Deploy to Minikube
     needs: gate
     if: needs.gate.outputs.eligible == 'true'
-    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    runs-on: [self-hosted, linux, "${{ vars.MINIKUBE_RUNNER_LABEL }}"]
+    environment: minikube
     env:
-      IMAGE_REGISTRY: ${{ secrets.IMAGE_REGISTRY }}
       IMAGE_TAG: ${{ needs.gate.outputs.sha }}
-      REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
-      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.gate.outputs.sha }}
           persist-credentials: false
-      - name: Build and publish images
+      - name: Build and load exact tested revision
         shell: bash
-        run: |
-          set -euo pipefail
-          : "${IMAGE_REGISTRY:?Set the IMAGE_REGISTRY secret}"
-          : "${REGISTRY_USERNAME:?Set the REGISTRY_USERNAME secret}"
-          : "${REGISTRY_PASSWORD:?Set the REGISTRY_PASSWORD secret}"
-          docker build -t "${IMAGE_REGISTRY}/boardly-backend:${IMAGE_TAG}" ./backend
-          docker build -t "${IMAGE_REGISTRY}/boardly-frontend:${IMAGE_TAG}" -f frontend/Dockerfile .
-          export DOCKER_CONFIG="$(mktemp -d)"
-          trap 'rm -rf "$DOCKER_CONFIG"' EXIT
-          printf '%s' "$REGISTRY_PASSWORD" | docker login "${IMAGE_REGISTRY%%/*}" --username "$REGISTRY_USERNAME" --password-stdin
-          docker push "${IMAGE_REGISTRY}/boardly-backend:${IMAGE_TAG}"
-          docker push "${IMAGE_REGISTRY}/boardly-frontend:${IMAGE_TAG}"
-          echo "Published both images for ${IMAGE_TAG}" >> "$GITHUB_STEP_SUMMARY"
-
-  deploy:
-    name: Deploy to Minikube
-    needs: [gate, publish]
-    runs-on: [self-hosted, linux, "${{ vars.MINIKUBE_RUNNER_LABEL }}"]
-    environment: minikube
-    env:
-      IMAGE_REGISTRY: ${{ secrets.IMAGE_REGISTRY }}
-      IMAGE_TAG: ${{ needs.gate.outputs.sha }}
-      REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
-      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
-      K8S_DB_USERNAME: ${{ secrets.K8S_DB_USERNAME }}
-      K8S_DB_PASSWORD: ${{ secrets.K8S_DB_PASSWORD }}
-      K8S_JWT_SECRET: ${{ secrets.K8S_JWT_SECRET }}
-    steps:
+        run: bash .github/scripts/deploy.sh build
       - name: Skip superseded release immediately before deployment
         id: current
         uses: actions/github-script@v9
@@ -140,19 +111,12 @@ jobs:
           script: |
             const { owner, repo } = context.repo
             const { data: branch } = await github.rest.repos.getBranch({ owner, repo, branch: 'main' })
-            const sha = process.env.IMAGE_TAG
-            if (branch.commit.sha !== sha) {
-              core.info(`Skipped superseded release ${sha}; main is ${branch.commit.sha}`)
-              await core.summary.addRaw(`Skipped superseded release ${sha}; main is ${branch.commit.sha}`).write()
-            } else {
+            if (branch.commit.sha === process.env.IMAGE_TAG) {
               core.setOutput('current', 'true')
+            } else {
+              await core.summary.addRaw(`Skipped superseded release ${process.env.IMAGE_TAG}; main is ${branch.commit.sha}`).write()
             }
-      - uses: actions/checkout@v4
-        if: steps.current.outputs.current == 'true'
-        with:
-          ref: ${{ needs.gate.outputs.sha }}
-          persist-credentials: false
       - name: Deploy and smoke test
         if: steps.current.outputs.current == 'true'
         shell: bash
-        run: bash .github/scripts/deploy.sh
+        run: bash .github/scripts/deploy.sh deploy

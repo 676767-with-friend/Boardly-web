@@ -1,30 +1,56 @@
-# CI/CD และ Release
+# CI/CD และ dedicated local runner
 
-## CI และ Vercel
+## Release path
 
-[`ci.yml`](../.github/workflows/ci.yml) รันเมื่อมี pull request ที่ตรงเงื่อนไข หรือ push ไป `main` โดยมีสามงาน: `Frontend (build + Vitest)`, `Backend (mvn verify)` และ `E2E (Cypress)` Pull request ไม่เผยแพร่ images และไม่ deploy Minikube
+CI ใช้ GitHub-hosted runners ตรวจ frontend build/Vitest, backend mvn verify กับฐานแยก และ Cypress บน Compose ชื่อ jobs เดิมคงไว้
 
-Vercel ใช้ Git integration แยกจาก Kubernetes สำหรับ frontend ที่ https://boardly-web-ebon.vercel.app/ โปรเจกต์ Vercel ควรเชื่อม repository นี้ ตั้ง production branch เป็น `main` และ root directory เป็น `frontend` การตั้งค่าและผล deploy จริงต้องตรวจใน Vercel dashboard
+release.yml รับ workflow_run ที่ CI เสร็จ ตรวจ repository ต้นทาง, push, main, success และครบสาม jobs จาก API ก่อนส่ง exact head SHA ไป local runner PR/fork/failed/cancelled/branch อื่น deploy ไม่ได้ ไม่มี privileged PR trigger หรือ untrusted artifacts
 
-## Kubernetes release อัตโนมัติ
+Runner checkout SHA นั้น build/tag/load เข้า Minikube แล้วตรวจ main ใหม่หลัง build ทันทีก่อน deploy เพื่อข้าม revision ที่ถูกแทนที่ Serialize release โดยไม่ยกเลิกงานที่กำลังรัน GitHub อาจแทน pending run ด้วยงานใหม่ แต่ gate ยังตรวจ superseded SHA
 
-[`release.yml`](../.github/workflows/release.yml) เริ่มเมื่อ CI บน `main` เสร็จ ระบบยอมรับเฉพาะ CI จาก repository นี้ที่เกิดจาก `push`, สำเร็จ, และทั้งสามงานข้างต้นผ่าน หาก CI ล้มเหลว ถูกยกเลิก มาจาก PR หรือ branch อื่น จะไม่ publish/deploy
+ใช้ environment minikube เดิม ไม่ข้าม approvals; job จำกัด 45 นาที มี bounded rollout/migration/HTTP checks ไม่มี publish job หรือ external registry credentials Base images/dependencies ยังดาวน์โหลดเมื่อจำเป็น
 
-Workflow ใช้ SHA ของ commit ที่ CI ทดสอบจริงสำหรับ checkout, Docker image tags และ deployment หาก `main` เปลี่ยนไปแล้ว จะข้าม release ก่อน publish หรือก่อน deploy เพื่อไม่ให้เวอร์ชันเก่าทับเวอร์ชันใหม่ งาน deploy ใช้ runner เดียวในแต่ละครั้งและไม่ยกเลิกงานที่กำลังทำอยู่
+## เตรียมเครื่องและขออนุญาต
 
-ผู้ดูแลใช้ `workflow_dispatch` บน `main` เพื่อ retry ได้ โดยยังต้องมี push-triggered CI ที่ผ่านสำหรับ commit เดียวกัน ไม่มีตัวเลือกข้ามการตรวจสอบ
+ทำ [คู่มือ Minikube](LOCAL_KUBERNETES.md) ก่อน เจ้าของเครื่องต้องยืนยันชัดเจนว่าอนุญาต persistent self-hosted runner ซึ่งเปิดให้ eligible GitHub jobs รันคำสั่งบนเครื่องนี้ด้วยสิทธิ์เข้าถึง Docker และ Minikube ของ user นั้น ห้ามลงทะเบียนก่อนยินยอม และห้ามส่ง registration token ในแชต
 
-## การตั้งค่าที่ต้องมี
+ใช้ user สำหรับงานพัฒนาที่ไม่มี production credentials จำกัดผู้แก้ workflow/main อย่าเพิ่ม self-hosted runner ใน PR workflows
 
-- Repository secrets เดิม: `IMAGE_REGISTRY`, `REGISTRY_USERNAME`, `REGISTRY_PASSWORD`, `K8S_DB_USERNAME`, `K8S_DB_PASSWORD`, `K8S_JWT_SECRET` โดย JWT secret ต้องยาวอย่างน้อย 32 ตัวอักษร
-- Repository variable `MINIKUBE_RUNNER_LABEL`: ใส่ label เฉพาะของ Linux self-hosted runner ที่ผู้ดูแลยืนยันว่าอยู่บนเครื่อง Minikube ที่อนุญาต ห้ามใช้เพียง `self-hosted`, `linux` หรือ `x64`
-- Runner ต้องออนไลน์ มี Bash, kubectl, Minikube และ kubeconfig context `minikube` ที่เข้าถึง local cluster ได้ รวมทั้งเข้าถึง registry สำหรับ image pull
-- GitHub environment `minikube`: ตรวจ approval rules และ secrets ที่ใช้ก่อนเปิดใช้งาน หากบังคับ approval งานจะรอผู้มีสิทธิ์อนุมัติ; workflow ไม่ข้ามกฎนี้
+## ลงทะเบียนผ่าน official GitHub flow
 
-Registry เดิมต้องให้สิทธิ์ push แก่ workflow และ pull แก่ cluster ห้ามใส่ credentials หรือ kubeconfig ลง repository หาก variable หรือ secrets ขาด gate/publish จะล้มเหลว; หาก runner offline หรือ label ไม่ตรง งาน deploy จะรอ runner อย่าตั้ง runner ให้ชี้ไป shared/production cluster
+ผู้มีสิทธิ์เข้า repository Settings > Actions > Runners > New self-hosted runner เลือก Linux และ architecture ให้ตรงเครื่อง ทำ download/checksum/config ตามคำสั่งในหน้านั้นบนเครื่องเป้าหมายโดยตรง ดู [GitHub official setup](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/add-runners) ใช้ token ชั่วคราวจากหน้า setup ไม่เก็บใน repository
 
-Migration ปัจจุบันคือ `001-create-notifications.sql` ใช้ transaction และ `IF NOT EXISTS` จึงรันซ้ำกับ schema เดิมได้ แต่ไม่ตรวจว่าโครงสร้างตารางที่มีอยู่ตรงกัน Workflow ลบเฉพาะ Job เก่าก่อนรัน migration ใหม่ ไม่ลบข้อมูลหรือ PVC
+ติดตั้งนอก checkout เช่น ~/actions-runner-boardly กำหนดชื่อและ custom label ที่บ่งชี้เครื่องจริง เช่น boardly-team-laptop-wsl ตั้ง repository variable MINIKUBE_RUNNER_LABEL ให้ตรง label นั้น Workflow เลือก self-hosted + linux + unique label ไม่เลือก runner กว้าง ๆ
 
-## ตรวจผล
+ตรวจ Settings > Environments > minikube และคง required approvals/protection เดิมไว้ ตรวจ required checks/reviews ก่อน merge ห้าม bypass
 
-ดู CI และ `Publish and deploy` ใน GitHub Actions ตรวจ SHA ของ CI, image tags, สถานะ publish, migration, rollout และ smoke test ใน run เดียวกัน เมื่อ deploy สำเร็จ จึงใช้ `kubectl port-forward svc/frontend 8088:80 -n boardly` บนเครื่องที่เข้าถึง Minikube แล้วเปิด `http://localhost:8088` การ deploy ในเครื่องไม่เปิด URL สาธารณะ
+จาก runner directory หลังลงทะเบียน:
+
+```bash
+docker info
+minikube -p boardly-dev status
+kubectl --context boardly-dev -n boardly get secret boardly-secret -o name
+./run.sh
+```
+
+ต้องเห็น Listening for Jobs และ Idle/Online ใน Settings หยุดด้วย Ctrl+C เริ่มด้วย ./run.sh ใน user เดิม ไม่จำเป็นต้องติดตั้ง service เพื่อสาธิต หากใช้ service ให้ทำตาม official setup และตรวจ service user เข้าถึง Docker/kubeconfig เดียวกันจริง
+
+## เปิดเพื่อ deploy/สาธิต
+
+1. เปิด Docker และ WSL distro ที่ตั้งไว้
+2. รัน minikube -p boardly-dev start และตรวจ node Ready
+3. เปิด ./run.sh จาก runner directory
+4. Push/merge main ตาม checks/reviews แล้วรอ CI สาม jobs
+5. ดู Build and deploy locally ที่เริ่มอัตโนมัติ อนุมัติ environment หากกำหนด
+6. เทียบ CI head SHA, checkout, image tags, rollouts และ smoke summary
+7. เปิด port-forward ตามคู่มือ Minikube แล้วเข้า http://localhost:8088
+
+Manual retry: Actions > Build and deploy locally > Run workflow > main ต้องมี push CI ผ่านสำหรับ SHA เดียวกัน ไม่มี bypass หาก main เปลี่ยนให้รอ CI ใหม่
+
+## Offline และสถานะการตรวจสอบ
+
+เมื่อเครื่องปิด CI hosted และ Vercel ยังทำงานแยกกัน Local deployment รอ runner และอาจหมดเวลารอ เมื่อ online workflow ตรวจ main ก่อน deploy อีกครั้ง ไม่รับประกัน availability 24/7
+
+เจ้าของระบุให้เตรียม repo สำหรับเครื่องอื่น ใน session นี้จึงยังไม่ได้สร้าง cluster/register runner/สังเกต automatic release ต้องบันทึกเครื่อง/user/label จริง, CI/release links, deployed SHA และผล flows ใน PR หลังทดสอบบนเครื่องนั้น YAML/guard tests ไม่ใช่หลักฐาน deploy สำเร็จ
+
+Vercel Git deployment ยังคงเปิดแยกกัน ตรวจ root frontend, production branch main และ deployment ล่าสุดใน dashboard เว็บสาธารณะไม่ได้ยืนยัน Minikube backend
