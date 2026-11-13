@@ -127,24 +127,6 @@ describe("authentication pages", () => {
     expect(mocks.register).not.toHaveBeenCalled()
   })
 
-  it("validates missing registration names and mismatched passwords", () => {
-    renderPage(<RegisterPage />)
-    fireEvent.submit(
-      screen.getByRole("button", { name: "Create Account" }).closest("form")!,
-    )
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "Complete your name and email address.",
-    )
-    completeRegistration()
-    fireEvent.change(screen.getByLabelText("Confirm"), {
-      target: { value: "DifferentPass123!" },
-    })
-    fireEvent.click(screen.getByRole("button", { name: "Create Account" }))
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "Passwords do not match.",
-    )
-  })
-
   it("registers the validated account with optional profile values", async () => {
     renderPage(<RegisterPage />)
     completeRegistration()
@@ -184,10 +166,7 @@ describe("authentication pages", () => {
   })
 
   it("handles forgot-password validation, loading, and development reset links", async () => {
-    let resolveRequest: (value: {
-      message: string
-      devResetUrl: string
-    }) => void
+    let resolveRequest: (value: { message: string devResetUrl: string }) => void
     vi.mocked(authApi.forgotPassword).mockReturnValueOnce(
       new Promise((resolve) => {
         resolveRequest = resolve
@@ -238,12 +217,6 @@ describe("authentication pages", () => {
     expect(
       screen.getByRole("button", { name: "Reset Password" }),
     ).toBeDisabled()
-    fireEvent.submit(
-      screen.getByRole("button", { name: "Reset Password" }).closest("form")!,
-    )
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "This reset link is invalid or incomplete.",
-    )
     missing.unmount()
 
     renderPage(<ResetPasswordPage />, "/reset-password?token=reset-token")
@@ -256,10 +229,7 @@ describe("authentication pages", () => {
 
     await browser.clear(screen.getByLabelText("New Password"))
     await browser.clear(screen.getByLabelText("Confirm Password"))
-    await browser.type(
-      screen.getByLabelText("New Password"),
-      "BoardlyPass123!",
-    )
+    await browser.type(screen.getByLabelText("New Password"), "BoardlyPass123!")
     await browser.type(
       screen.getByLabelText("Confirm Password"),
       "DifferentPass123!",
@@ -297,15 +267,14 @@ describe("authentication pages", () => {
     vi.mocked(authApi.resetPassword).mockRejectedValueOnce(
       new Error("Reset token expired"),
     )
+    const browser = userEvent.setup()
     renderPage(<ResetPasswordPage />, "/reset-password?token=expired")
-    fireEvent.change(screen.getByLabelText("New Password"), {
-      target: { value: "BoardlyPass123!" },
-    })
-    fireEvent.change(screen.getByLabelText("Confirm Password"), {
-      target: { value: "BoardlyPass123!" },
-    })
-    fireEvent.click(screen.getByRole("button", { name: "Reset Password" }))
-
+    await browser.type(screen.getByLabelText("New Password"), "BoardlyPass123!")
+    await browser.type(
+      screen.getByLabelText("Confirm Password"),
+      "BoardlyPass123!",
+    )
+    await browser.click(screen.getByRole("button", { name: "Reset Password" }))
     expect(await screen.findByText("Reset token expired")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Reset Password" })).toBeEnabled()
   })

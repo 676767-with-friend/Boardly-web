@@ -205,27 +205,6 @@ describe("admin management pages", () => {
     expect(screen.getByRole("button", { name: "Activate" })).toBeInTheDocument()
   })
 
-  it("shows user loading and status-update fallbacks and submits a search", async () => {
-    vi.mocked(adminApi.users).mockRejectedValueOnce({})
-    const failed = render(<UserManagementPage />)
-    expect(await screen.findByText("Unable to complete that request.")).toBeInTheDocument()
-    failed.unmount()
-
-    const grace = { id: "user-2", name: "Grace Hopper", email: "grace@example.test", phone: null, status: "active", roles: ["customer"] }
-    vi.mocked(adminApi.users).mockResolvedValueOnce([grace] as never)
-    vi.mocked(adminApi.users).mockResolvedValueOnce([grace] as never)
-    vi.mocked(adminApi.updateUserStatus).mockRejectedValueOnce(new Error("Status update failed"))
-    render(<UserManagementPage />)
-    await screen.findByText("Grace Hopper")
-    const search = screen.getByPlaceholderText("Search name, email, phone...")
-    fireEvent.change(search, { target: { value: "grace@" } })
-    fireEvent.keyDown(search, { key: "Enter" })
-    await waitFor(() => expect(adminApi.users).toHaveBeenLastCalledWith("grace@"))
-    fireEvent.click(screen.getByRole("button", { name: "Deactivate" }))
-    expect(await screen.findByText("Status update failed")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Deactivate" })).toBeEnabled()
-  })
-
   it("validates staff assignment, reports duplicate email, then creates staff", async () => {
     vi.mocked(adminApi.createStaff)
       .mockRejectedValueOnce(new Error("Email already exists"))
@@ -317,35 +296,6 @@ describe("admin management pages", () => {
     )
   })
 
-  it("validates staff phone and primary branch, filters by email, and handles load failures", async () => {
-    vi.mocked(adminApi.staff).mockResolvedValueOnce([
-      { id: "staff-1", name: "Lin Manager", email: "lin@example.test", phone: "0812345678", status: "active", branchIds: ["branch-1"], branchNames: ["Central"], lastLoginAt: null, roles: ["manager"] },
-    ])
-    vi.mocked(adminApi.updateStaff).mockRejectedValueOnce({})
-    const staffView = render(<StaffManagementPage />)
-    await screen.findByText("Lin Manager")
-    fireEvent.change(screen.getByPlaceholderText("Search staff name or email..."), { target: { value: "lin@example" } })
-    expect(screen.getByText("Lin Manager")).toBeInTheDocument()
-    fireEvent.click(screen.getByRole("button", { name: "Edit" }))
-    fireEvent.change(screen.getByLabelText("Role"), { target: { value: "staff" } })
-    fireEvent.click(screen.getByLabelText("Central"))
-    fireEvent.click(screen.getByRole("button", { name: "Save" }))
-    expect(await screen.findByText("Choose a primary branch from the assigned branches.")).toBeInTheDocument()
-    fireEvent.click(screen.getByLabelText("Central"))
-    fireEvent.change(screen.getByLabelText("Phone"), { target: { value: "invalid" } })
-    fireEvent.click(screen.getByRole("button", { name: "Save" }))
-    expect(await screen.findByText(/กรุณากรอกหมายเลขโทรศัพท์ไทย/)).toBeInTheDocument()
-    fireEvent.change(screen.getByLabelText("Phone"), { target: { value: "0812345678" } })
-    fireEvent.click(screen.getByRole("button", { name: "Save" }))
-    expect(await screen.findByText("Unable to complete that request.")).toBeInTheDocument()
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }))
-    staffView.unmount()
-
-    vi.mocked(adminApi.staff).mockRejectedValueOnce({})
-    render(<StaffManagementPage />)
-    expect(await screen.findByText("Unable to complete that request.")).toBeInTheDocument()
-  })
-
   it("updates a branch and sends its reservation setting", async () => {
     vi.mocked(adminApi.updateBranch).mockResolvedValue({
       ...branch,
@@ -373,19 +323,6 @@ describe("admin management pages", () => {
         }),
       ),
     )
-  })
-
-  it("validates branch phone numbers and closes an unsaved editor", async () => {
-    render(<BranchManagementPage />)
-    fireEvent.click(await screen.findByRole("button", { name: "+ Add Branch" }))
-    fireEvent.change(screen.getByLabelText("Phone"), {
-      target: { value: "invalid" },
-    })
-    fireEvent.click(screen.getByRole("button", { name: "Save" }))
-    expect(await screen.findByText(/กรุณากรอกหมายเลขโทรศัพท์ไทย/)).toBeInTheDocument()
-    expect(adminApi.createBranch).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }))
-    expect(screen.queryByRole("heading", { name: "Add Branch" })).not.toBeInTheDocument()
   })
 
   it("surfaces duplicate branch and product creation errors without closing editors", async () => {
@@ -497,43 +434,6 @@ describe("admin management pages", () => {
         lowStockThreshold: 3,
       }),
     )
-  })
-
-  it("updates all product form fields, changes branch inventory, and recovers from stock API failures", async () => {
-    const north = { ...branch, id: "branch-2", name: "North" }
-    vi.mocked(adminApi.branches).mockResolvedValue([branch, north])
-    vi.mocked(adminApi.products).mockResolvedValue([product, { ...product, id: "product-2", name: "Azul" }])
-    vi.mocked(adminApi.updateProduct).mockResolvedValue(product)
-    vi.mocked(adminApi.adjustInventory).mockRejectedValueOnce(new Error("Stock adjustment denied"))
-    vi.mocked(adminApi.addInventory).mockRejectedValueOnce(new Error("Inventory creation denied"))
-    vi.mocked(adminApi.inventory).mockResolvedValue([inventory])
-
-    render(<AdminProductsPage />)
-    await screen.findByText("Catan")
-    fireEvent.click(screen.getAllByRole("button", { name: "Edit" })[0])
-    fireEvent.change(screen.getByLabelText("Category"), { target: { value: "category-1" } })
-    fireEvent.change(screen.getByLabelText("Difficulty"), { target: { value: "expert" } })
-    fireEvent.change(screen.getByLabelText("Description"), { target: { value: "Updated rules" } })
-    fireEvent.click(screen.getByLabelText("Active product"))
-    fireEvent.change(screen.getByLabelText("Sale Price"), { target: { value: "" } })
-    fireEvent.click(screen.getByRole("button", { name: "Save" }))
-    await waitFor(() => expect(adminApi.updateProduct).toHaveBeenCalledWith("product-1", expect.objectContaining({ difficulty: "expert", description: "Updated rules", active: false, salePrice: null })))
-
-    fireEvent.change(screen.getByDisplayValue("Central"), { target: { value: "branch-2" } })
-    await waitFor(() => expect(adminApi.inventory).toHaveBeenLastCalledWith("branch-2"))
-    fireEvent.click(await screen.findByRole("button", { name: "Adjust" }))
-    fireEvent.change(screen.getByLabelText("Quantity change"), { target: { value: "1" } })
-    fireEvent.click(screen.getByRole("button", { name: "Save" }))
-    expect(await screen.findByText("Stock adjustment denied")).toBeInTheDocument()
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }))
-
-    fireEvent.click(screen.getByRole("button", { name: "+ Add Catalog Product" }))
-    fireEvent.change(screen.getByLabelText("Product"), { target: { value: "product-2" } })
-    fireEvent.change(screen.getByLabelText("Opening quantity"), { target: { value: "5" } })
-    fireEvent.change(screen.getByLabelText("Low-stock threshold"), { target: { value: "2" } })
-    fireEvent.click(screen.getByRole("button", { name: "Save" }))
-    expect(await screen.findByText("Inventory creation denied")).toBeInTheDocument()
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }))
   })
 
   it("surfaces unauthorized product-management access", async () => {

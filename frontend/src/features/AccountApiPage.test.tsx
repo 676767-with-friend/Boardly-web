@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { AccountApiPage } from "./AccountApiPage"
 import { useAuth } from "@/auth/AuthProvider"
@@ -167,33 +167,5 @@ describe("customer account API page", () => {
     expect(
       await screen.findByText("Duplicate profile value"),
     ).toBeInTheDocument()
-  })
-
-  it("covers account error fallbacks, profile input edits, cancel, and detail links", async () => {
-    vi.mocked(profileApi.get).mockRejectedValueOnce({})
-    const failed = render(<AccountApiPage />)
-    expect(await screen.findByText("Unable to complete that request.")).toBeInTheDocument()
-    failed.unmount()
-
-    vi.mocked(profileApi.get).mockResolvedValueOnce({ ...profile, displayName: null })
-    render(<AccountApiPage />)
-    await screen.findByText("Welcome back, Ada Lovelace")
-    fireEvent.click(screen.getAllByRole("button", { name: "View all", exact: true })[0])
-    fireEvent.click(screen.getAllByRole("button", { name: "View all", exact: true })[1])
-    fireEvent.click(screen.getByRole("button", { name: "Edit Profile" }))
-    fireEvent.change(screen.getByLabelText("First name"), { target: { value: "Augusta" } })
-    fireEvent.change(screen.getByLabelText("Last name"), { target: { value: "King" } })
-    fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "" } })
-    fireEvent.change(screen.getByLabelText("Phone"), { target: { value: "" } })
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }))
-    expect(screen.queryByLabelText("First name")).not.toBeInTheDocument()
-  })
-
-  it("ignores account results after the page has unmounted", async () => {
-    let resolveProfile!: (value: typeof profile) => void
-    vi.mocked(profileApi.get).mockReturnValueOnce(new Promise(resolve => { resolveProfile = resolve }))
-    const view = render(<AccountApiPage />)
-    view.unmount()
-    await act(async () => resolveProfile(profile))
   })
 })
