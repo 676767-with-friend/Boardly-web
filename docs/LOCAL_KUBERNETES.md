@@ -1,208 +1,105 @@
-\# คู่มือ Local Kubernetes
+# Minikube บนเครื่องที่ทีมอนุญาต
 
+## เตรียมเครื่อง
 
+ยืนยันกับเจ้าของเครื่องก่อน setup ถาวร ใช้ Linux หรือ Ubuntu WSL2 โดยให้ Docker, kubectl, Minikube และ runner ใช้ Linux user เดียวกัน ไม่สมมติว่า Windows กับ WSL ใช้ kubeconfig เดียวกัน
 
-คู่มือนี้ใช้สำหรับรัน Boardly บน Minikube ในเครื่องสำหรับการพัฒนาและทดสอบเท่านั้น ไม่ใช่ Production หรือ Shared Cluster
+บน Windows เปิด Docker Desktop > Settings > Resources > WSL Integration สำหรับ Ubuntu ที่ใช้ ตรวจจาก Ubuntu:
 
-
-
-\## 1. เครื่องมือที่ต้องมี
-
-
-
-\- Docker Desktop และ Docker Compose
-
-\- Minikube
-
-\- kubectl
-
-\- PowerShell
-
-
-
-\## 2. เริ่ม Minikube
-
-
-
-จาก Repository root:
-
-
-
-```powershell
-
-minikube start --driver=docker --cpus=4 --memory=4096 --disk-size=20g
-
-kubectl config use-context minikube
-
-kubectl get nodes
-
+```bash
+uname -a
+docker info
+free -h
+df -h .
+command -v git bash curl kubectl minikube
+kubectl config get-contexts
+minikube profile list
 ```
 
+ติดตั้งจาก [Minikube official setup](https://minikube.sigs.k8s.io/docs/start/) และ [kubectl official install](https://kubernetes.io/docs/tasks/tools/install-kubectl-linux/) เท่านั้น เลือก architecture และตรวจ checksum ตามเอกสาร แนะนำพื้นที่ว่างอย่างน้อย 20GB จัดสรร cluster 2 CPU/RAM 4GB และเหลือ RAM สำหรับ host/image builds
 
+## Profile และ credentials ครั้งแรก
 
-ตรวจสอบว่า Node มีสถานะ `Ready` ก่อนดำเนินการต่อ
+รัน Bash จาก root ของ checkout บนเครื่องเป้าหมาย ตรวจว่า profile `boardly-dev` ไม่ใช่งานอื่น หากมีแล้วต้องยืนยันว่าเป็น development profile ที่อนุญาตก่อน reuse:
 
-
-
-\## 3. Build และ Load Images
-
-
-
-```powershell
-
-docker build -t boardly-backend:local .\\backend
-
-docker build -t boardly-frontend:local -f frontend/Dockerfile .
-
-minikube image load boardly-backend:local boardly-frontend:local
-
+```bash
+minikube start -p boardly-dev --driver=docker --cpus=2 --memory=4096
+kubectl --context boardly-dev wait --for=condition=Ready nodes --all --timeout=180s
+kubectl --context boardly-dev apply -f k8s/00-namespace.yaml
 ```
 
+เฉพาะ namespace ใหม่ที่ยังไม่มี Secret สร้าง development credentials แบบสุ่มโดยไม่แสดงค่าบนจอ คำสั่ง create จะไม่เขียนทับ Secret เดิม:
 
-
-ตรวจสอบ Images:
-
-
-
-```powershell
-
-minikube image ls
-
+```bash
+set -euo pipefail
+umask 077
+secret_file=$(mktemp)
+trap 'rm -f "$secret_file"' EXIT
+printf 'DB_USERNAME=boardly\nDB_PASSWORD=%s\nJWT_SECRET=%s\n' "$(head -c 32 /dev/urandom | base64 -w0)" "$(head -c 48 /dev/urandom | base64 -w0)" > "$secret_file"
+kubectl --context boardly-dev -n boardly create secret generic boardly-secret --from-env-file="$secret_file"
+rm -f "$secret_file"
+trap - EXIT
 ```
 
+หากมี Secret/PVC เดิมให้เก็บไว้ ตรวจว่าค่าเดิมใช้ได้ ไม่สร้างใหม่ Release ต้องพบ Secret ก่อนเริ่มและไม่ rotate credentials ไม่ต้องคัดลอก DB/JWT secrets ไป GitHub
 
+## Build และ deploy
 
-\## 4. เตรียม Namespace, Secret และ ConfigMap
+ใช้ checkout สะอาดของ commit ที่ต้องการตรวจสอบ จาก root:
 
-
-
-```powershell
-
-kubectl apply -f .\\k8s\\00-namespace.yaml
-
-
-
-kubectl create secret generic boardly-secret -n boardly `
-
-&#x20; --from-literal=DB\_USERNAME=boardly `
-
-&#x20; --from-literal=DB\_PASSWORD=YOUR\_LOCAL\_DB\_PASSWORD `
-
-&#x20; --from-literal=JWT\_SECRET=YOUR\_LOCAL\_JWT\_SECRET\_AT\_LEAST\_32\_CHARACTERS
-
-
-
-kubectl create configmap boardly-db-init -n boardly `
-
-&#x20; --from-file=01-schema.sql=.\\database\\Boardly\_schema.sql `
-
-&#x20; --from-file=02-seed-dev.sql=.\\database\\seed-dev.sql `
-
-&#x20; --from-file=001-create-notifications.sql=.\\database\\migrations\\001-create-notifications.sql
-
+```bash
+export IMAGE_TAG=$(git rev-parse HEAD)
+bash .github/scripts/deploy.sh build
+bash .github/scripts/deploy.sh deploy
 ```
 
+สคริปต์ build ด้วย SHA tags, load เข้า profile เดียวกัน ใช้ local overlay ที่ตั้ง IfNotPresent เริ่ม PostgreSQL และรอพร้อมก่อนรัน migration จากนั้น apply images ตาม SHA ครั้งเดียว รอ rollouts ตรวจ tags และ HTTP หน้าเว็บ/health ผ่าน proxy คืน nonzero เมื่อขั้นตอนล้มเหลว
 
+ฐานใหม่รัน schema แล้ว seed ผ่าน init ConfigMap ฐานเดิมไม่รัน init ซ้ำ Migration notifications มี transaction/IF NOT EXISTS จึง rerun ได้ แต่ไม่ซ่อม schema ที่ไม่ตรง ลบเฉพาะ migration Job เก่า ไม่ลบ Secret/PVC/ข้อมูล
 
-เปลี่ยนค่า Placeholder เป็นรหัสผ่านสำหรับการทดสอบในเครื่อง และใช้ JWT secret ที่ยาวอย่างน้อย 32 ตัวอักษร ห้ามบันทึก Secret ลง Git
+## เปิดเว็บและตรวจ representative flows
 
-
-
-หากมี Secret หรือ ConfigMap อยู่แล้ว อย่าสร้างทับโดยไม่ตรวจสอบค่าก่อน
-
-
-
-\## 5. Deploy ด้วย Local Overlay
-
-
-
-```powershell
-
-kubectl kustomize --load-restrictor=LoadRestrictionsNone .\\k8s\\local
-
-kubectl kustomize --load-restrictor=LoadRestrictionsNone .\\k8s\\local | kubectl apply -f -
-
+```bash
+kubectl --context boardly-dev -n boardly get pods,svc,pvc,jobs
+kubectl --context boardly-dev -n boardly port-forward svc/frontend 8088:80
 ```
 
+เข้า http://localhost:8088 อีก terminal:
 
-
-Overlay นี้นำ Manifest หลักจาก `k8s/` มาใช้ และถอด `imagePullSecrets` สำหรับ Local Images เท่านั้น โดยไม่แก้ Manifest หลัก
-
-
-
-\## 6. ตรวจสอบ Rollout
-
-
-
-```powershell
-
-kubectl rollout status deployment/boardly-db -n boardly --timeout=180s
-
-kubectl wait --for=condition=complete job/boardly-db-migrate -n boardly --timeout=180s
-
-kubectl rollout status deployment/boardly-backend -n boardly --timeout=180s
-
-kubectl rollout status deployment/boardly-frontend -n boardly --timeout=120s
-
-kubectl get pods,svc,pvc,jobs -n boardly
-
+```bash
+curl --fail --max-time 15 http://localhost:8088/api/health
+kubectl --context boardly-dev -n boardly get deployments -o wide
 ```
 
+ทดสอบสมัครบัญชี เข้าระบบ ดูสินค้า/สาขา เพิ่มตะกร้าและจองโต๊ะด้วยข้อมูลพัฒนา ตรวจฝั่งพนักงานตามบัญชีใน seed แล้วบันทึกผลจริงใน PR Health ผ่านไม่ได้หมายถึง flows ผ่านทั้งหมด
 
+WSL ต้องตรวจว่า Windows browser เข้าถึง localhost forwarding ได้จริง ไม่ใช้ public tunnel ไม่เพิ่ม --address=0.0.0.0 โดยไม่จำเป็น
 
-Pod ของ Migration Job ที่เป็น `Completed` ถือว่าทำงานสำเร็จ
+## หยุดและเริ่มใหม่
 
+หยุด port-forward ด้วย Ctrl+C แล้ว:
 
-
-\## 7. เปิดเว็บไซต์และทดสอบ
-
-
-
-```powershell
-
-kubectl port-forward svc/frontend 8088:80 -n boardly
-
+```bash
+minikube -p boardly-dev stop
+# เริ่มใหม่ด้วย user เดิม
+minikube -p boardly-dev start
 ```
 
+เก็บข้อมูลไว้ ห้ามใช้ minikube delete, ลบ PVC หรือ volume prune เพื่อแก้ปัญหา
 
+## Troubleshooting และ observability
 
-เปิด `http://localhost:8088`
-
-
-
-ใน PowerShell อีกหน้าต่างหนึ่ง:
-
-
-
-```powershell
-
-Invoke-WebRequest http://localhost:8088/api/health -UseBasicParsing
-
-kubectl exec -n boardly deployment/boardly-db -- pg\_isready -U boardly -d boardly\_db
-
-kubectl logs job/boardly-db-migrate -n boardly
-
+```bash
+kubectl --context boardly-dev -n boardly get pods,events
+kubectl --context boardly-dev -n boardly logs deployment/boardly-db --tail=100
+kubectl --context boardly-dev -n boardly logs job/boardly-db-migrate --tail=100
+kubectl --context boardly-dev -n boardly logs deployment/boardly-backend --tail=100
+kubectl --context boardly-dev -n boardly logs deployment/boardly-frontend --tail=100
+minikube -p boardly-dev image ls
 ```
 
+ปกปิดข้อมูลส่วนบุคคล/secret ก่อนแนบ logs ใน issue หาก migration ผิดให้ดู Job logs ก่อน rerun หาก image ผิดให้เทียบ SHA/profile ไม่แก้ด้วยการ pull จาก registry อื่น
 
+มีแล้ว: /api/health, backend readiness/liveness, frontend readiness, PostgreSQL pg_isready, container stdout/stderr และ CI failure logs
 
-API ควรตอบ HTTP 200 และ PostgreSQL ควรแสดง `accepting connections`
-
-
-
-\## 8. ข้อควรระวัง
-
-
-
-\- ตรวจสอบ Context ก่อน Apply ทุกครั้ง และใช้เฉพาะ Local Minikube
-
-\- ห้ามใช้กับ Production หรือ Shared Cluster
-
-\- ห้ามลบ PVC หรือใช้คำสั่งลบ Volume เพื่อแก้ปัญหา Database
-
-\- อย่า Commit Secret หรือ Credential
-
-\- Base manifests ใน `k8s/` ใช้สำหรับ Release ส่วน `k8s/local/` ใช้สำหรับ Local Images
-
-###### \- การ Publish Images และ Release เป็นขั้นตอน Manual แยกต่างหาก
-
+ยังขาด: health ไม่ตรวจ DB, ไม่มี application metrics/Prometheus scraping, dashboard, alerts หรือระบบรวม logs พร้อม retention/search ต้องตกลง scope และหลักฐานสาธิตเพิ่มเติม เช่น Prometheus/Grafana และ Loki ก่อนติดตั้ง งานนี้ไม่ได้เพิ่ม stack และยังไม่สรุปว่างานวิชาครบ

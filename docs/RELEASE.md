@@ -1,150 +1,56 @@
-\# คู่มือ CI/CD และ Release
+# CI/CD และ dedicated local runner
 
+## Release path
 
+CI ใช้ GitHub-hosted runners ตรวจ frontend build/Vitest, backend mvn verify กับฐานแยก และ Cypress บน Compose ชื่อ jobs เดิมคงไว้
 
-\## 1. Continuous Integration (CI)
+release.yml รับ workflow_run ที่ CI เสร็จ ตรวจ repository ต้นทาง, push, main, success และครบสาม jobs จาก API ก่อนส่ง exact head SHA ไป local runner PR/fork/failed/cancelled/branch อื่น deploy ไม่ได้ ไม่มี privileged PR trigger หรือ untrusted artifacts
 
+Runner checkout SHA นั้น build/tag/load เข้า Minikube แล้วตรวจ main ใหม่หลัง build ทันทีก่อน deploy เพื่อข้าม revision ที่ถูกแทนที่ Serialize release โดยไม่ยกเลิกงานที่กำลังรัน GitHub อาจแทน pending run ด้วยงานใหม่ แต่ gate ยังตรวจ superseded SHA
 
+ใช้ environment minikube เดิม ไม่ข้าม approvals; job จำกัด 45 นาที มี bounded rollout/migration/HTTP checks ไม่มี publish job หรือ external registry credentials Base images/dependencies ยังดาวน์โหลดเมื่อจำเป็น
 
-Workflow อยู่ที่ `.github/workflows/ci.yml`
+## เตรียมเครื่องและขออนุญาต
 
+ทำ [คู่มือ Minikube](LOCAL_KUBERNETES.md) ก่อน เจ้าของเครื่องต้องยืนยันชัดเจนว่าอนุญาต persistent self-hosted runner ซึ่งเปิดให้ eligible GitHub jobs รันคำสั่งบนเครื่องนี้ด้วยสิทธิ์เข้าถึง Docker และ Minikube ของ user นั้น ห้ามลงทะเบียนก่อนยินยอม และห้ามส่ง registration token ในแชต
 
+ใช้ user สำหรับงานพัฒนาที่ไม่มี production credentials จำกัดผู้แก้ workflow/main อย่าเพิ่ม self-hosted runner ใน PR workflows
 
-ทำงานเมื่อมี Push ไปยัง Branch ที่กำหนด หรือ Pull Request ตามเงื่อนไขใน Workflow
+## ลงทะเบียนผ่าน official GitHub flow
 
+ผู้มีสิทธิ์เข้า repository Settings > Actions > Runners > New self-hosted runner เลือก Linux และ architecture ให้ตรงเครื่อง ทำ download/checksum/config ตามคำสั่งในหน้านั้นบนเครื่องเป้าหมายโดยตรง ดู [GitHub official setup](https://docs.github.com/en/actions/how-tos/manage-runners/self-hosted-runners/add-runners) ใช้ token ชั่วคราวจากหน้า setup ไม่เก็บใน repository
 
+ติดตั้งนอก checkout เช่น ~/actions-runner-boardly กำหนดชื่อและ custom label ที่บ่งชี้เครื่องจริง เช่น boardly-team-laptop-wsl ตั้ง repository variable MINIKUBE_RUNNER_LABEL ให้ตรง label นั้น Workflow เลือก self-hosted + linux + unique label ไม่เลือก runner กว้าง ๆ
 
-มี 3 Jobs หลัก:
+ตรวจ Settings > Environments > minikube และคง required approvals/protection เดิมไว้ ตรวจ required checks/reviews ก่อน merge ห้าม bypass
 
+จาก runner directory หลังลงทะเบียน:
 
+```bash
+docker info
+minikube -p boardly-dev status
+kubectl --context boardly-dev -n boardly get secret boardly-secret -o name
+./run.sh
+```
 
-1\. `Frontend (build + Vitest)` — ใช้ Node.js 22 และ pnpm 10.34.3
+ต้องเห็น Listening for Jobs และ Idle/Online ใน Settings หยุดด้วย Ctrl+C เริ่มด้วย ./run.sh ใน user เดิม ไม่จำเป็นต้องติดตั้ง service เพื่อสาธิต หากใช้ service ให้ทำตาม official setup และตรวจ service user เข้าถึง Docker/kubeconfig เดียวกันจริง
 
-2\. `Backend (mvn verify)` — ใช้ Java 21 และ PostgreSQL 16
+## เปิดเพื่อ deploy/สาธิต
 
-3\. `E2E (Cypress)` — ทดสอบ Integration ผ่าน Docker Compose
+1. เปิด Docker และ WSL distro ที่ตั้งไว้
+2. รัน minikube -p boardly-dev start และตรวจ node Ready
+3. เปิด ./run.sh จาก runner directory
+4. Push/merge main ตาม checks/reviews แล้วรอ CI สาม jobs
+5. ดู Build and deploy locally ที่เริ่มอัตโนมัติ อนุมัติ environment หากกำหนด
+6. เทียบ CI head SHA, checkout, image tags, rollouts และ smoke summary
+7. เปิด port-forward ตามคู่มือ Minikube แล้วเข้า http://localhost:8088
 
+Manual retry: Actions > Build and deploy locally > Run workflow > main ต้องมี push CI ผ่านสำหรับ SHA เดียวกัน ไม่มี bypass หาก main เปลี่ยนให้รอ CI ใหม่
 
+## Offline และสถานะการตรวจสอบ
 
-CI ใช้สำหรับตรวจสอบคุณภาพโค้ด ไม่ได้ Deploy Kubernetes โดยอัตโนมัติ
+เมื่อเครื่องปิด CI hosted และ Vercel ยังทำงานแยกกัน Local deployment รอ runner และอาจหมดเวลารอ เมื่อ online workflow ตรวจ main ก่อน deploy อีกครั้ง ไม่รับประกัน availability 24/7
 
+เจ้าของระบุให้เตรียม repo สำหรับเครื่องอื่น ใน session นี้จึงยังไม่ได้สร้าง cluster/register runner/สังเกต automatic release ต้องบันทึกเครื่อง/user/label จริง, CI/release links, deployed SHA และผล flows ใน PR หลังทดสอบบนเครื่องนั้น YAML/guard tests ไม่ใช่หลักฐาน deploy สำเร็จ
 
-
-\## 2. Vercel Frontend
-
-
-
-Frontend ใช้ Vercel Project เดิม:
-
-
-
-`https://boardly-web-ebon.vercel.app/`
-
-
-
-การตั้งค่า Root Directory ที่ใช้เดิมคือ `frontend`
-
-
-
-ไฟล์ `frontend/vercel.json` ไม่ได้ปิด Git Deployment แล้ว การ Push หรือ Merge จึงสามารถทำให้ Vercel สร้าง Deployment ได้ หาก Git Integration ใน Vercel Project Settings เปิดใช้งานและเชื่อม Repository ถูกต้อง
-
-
-
-หลัง Push ให้ตรวจสอบใน Vercel Dashboard:
-
-
-
-\- Git Repository ที่เชื่อมต่อ
-
-\- Production Branch เป็น `main`
-
-\- Root Directory เป็น `frontend`
-
-\- Git Deployments เปิดใช้งาน
-
-\- สถานะ Deployment ล่าสุด
-
-
-
-การแก้ `vercel.json` เพียงอย่างเดียวไม่ได้ยืนยันว่า Dashboard ตั้งค่าถูกต้องหรือ Deployment สำเร็จ
-
-
-
-\## 3. Kubernetes Release
-
-
-
-Workflow อยู่ที่ `.github/workflows/release.yml`
-
-
-
-Release เป็นแบบ Manual เท่านั้น โดยผู้ดูแลต้องเข้า GitHub Actions เลือก `Publish and deploy` และกด `Run workflow` บน Branch `main`
-
-
-
-Workflow ตรวจสอบ CI ของ Commit ที่จะ Release ก่อน Build และ Publish Images ไปยัง Registry เดิม จากนั้นจึง Deploy ไปยัง Minikube
-
-
-
-\*\*ห้ามเปลี่ยน Release เป็น Automatic Push Deployment\*\*
-
-
-
-\## 4. สิ่งที่ต้องเตรียมก่อน Release
-
-
-
-Repository Secrets ที่ Workflow ต้องใช้:
-
-
-
-\- `IMAGE\_REGISTRY`
-
-\- `REGISTRY\_USERNAME`
-
-\- `REGISTRY\_PASSWORD`
-
-\- `K8S\_DB\_USERNAME`
-
-\- `K8S\_DB\_PASSWORD`
-
-\- `K8S\_JWT\_SECRET`
-
-
-
-JWT Secret ต้องมีความยาวอย่างน้อย 32 bytes
-
-
-
-นอกจากนี้ต้องมี Linux self-hosted GitHub Actions runner ที่:
-
-
-
-\- ติดตั้ง Bash และ kubectl
-
-\- ใช้ kubeconfig ที่ Context ปัจจุบันชื่อ `minikube`
-
-\- ติดต่อ Minikube API และ Image Registry ได้
-
-\- มีสิทธิ์จัดการ Resources ใน Namespace `boardly`
-
-
-
-GitHub-hosted runner ไม่สามารถเข้าถึง Minikube ในเครื่องส่วนตัวได้โดยอัตโนมัติ
-
-
-
-ห้ามนำ Credential, kubeconfig หรือ Secret ใส่ Repository
-
-
-
-\## 5. ข้อควรระวัง
-
-
-
-\- Release ต้องได้รับการตรวจสอบและอนุมัติก่อนดำเนินการ
-
-\- ห้ามทดสอบ Release กับ Production หรือ Shared Cluster โดยไม่ได้รับอนุญาต
-
-\- Local Minikube ที่ทดสอบด้วย `
-
+Vercel Git deployment ยังคงเปิดแยกกัน ตรวจ root frontend, production branch main และ deployment ล่าสุดใน dashboard เว็บสาธารณะไม่ได้ยืนยัน Minikube backend

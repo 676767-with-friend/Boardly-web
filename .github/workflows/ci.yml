@@ -28,6 +28,10 @@ jobs:
           node-version: 22
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Release guard tests
+        run: |
+          node .github/scripts/release-guard.test.cjs
+          python3 .github/scripts/deploy.test.py
       - name: Install
         working-directory: frontend
         run: pnpm install --frozen-lockfile

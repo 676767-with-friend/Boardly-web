@@ -1,226 +1,51 @@
-\# คู่มือพัฒนา Boardly
+# พัฒนาและทดสอบ Boardly
 
+## เครื่องมือ
 
+Frontend ใช้ Node.js 22 และ pnpm 10.34.3; backend ใช้ Java 21 และ Maven
+ระบบรวมใช้ Docker Desktop และ Docker Compose
 
-\## 1. เทคโนโลยีที่ใช้
+## Frontend (PowerShell)
 
-
-
-\- Frontend: React 19, TypeScript, Vite 8, Tailwind CSS 4
-
-\- Frontend package manager: pnpm 10.34.3
-
-\- Backend: Java 21, Spring Boot 3.3.5, Maven
-
-\- Database: PostgreSQL 16
-
-\- E2E Testing: Cypress
-
-\- Unit Testing: Vitest และ JUnit
-
-
-
-\## 2. เครื่องมือที่ต้องติดตั้ง
-
-
-
-\- Node.js 22
-
-\- Corepack และ pnpm 10.34.3
-
-\- Java JDK 21
-
-\- Maven
-
-\- Docker Desktop และ Docker Compose
-
-
-
-ตรวจสอบเวอร์ชัน:
-
-
+จากโฟลเดอร์หลัก:
 
 ```powershell
-
-node --version
-
-pnpm --version
-
-java -version
-
-docker --version
-
-docker compose version
-
-```
-
-
-
-\## 3. ติดตั้ง Frontend Dependencies
-
-
-
-จาก Repository root:
-
-
-
-```powershell
-
-Set-Location .\\frontend
-
+Set-Location frontend
 corepack enable
-
 corepack prepare pnpm@10.34.3 --activate
-
 pnpm install --frozen-lockfile
-
-```
-
-
-
-เริ่ม Frontend Development Server:
-
-
-
-```powershell
-
 pnpm dev
-
 ```
 
-
-
-ใช้ URL ที่ Vite แสดงใน Terminal
-
-
-
-\## 4. เริ่มระบบด้วย Docker Compose
-
-
-
-กลับไป Repository root:
-
-
+ใช้ URL ที่ Vite แสดง หากต้องการตรวจสอบก่อนส่ง PR ให้รันใน `frontend/`:
 
 ```powershell
-
-Set-Location ..
-
-docker compose up --build -d
-
-docker compose ps
-
-```
-
-
-
-บริการที่เปิดใช้งาน:
-
-
-
-\- Frontend: `http://localhost:8443`
-
-\- Backend Health: `http://localhost:8080/api/health`
-
-\- Frontend ผ่าน Backend Proxy: `http://localhost:8443/api/health`
-
-\- PostgreSQL: `localhost:5433`
-
-
-
-หยุดบริการ:
-
-
-
-```powershell
-
-docker compose down
-
-```
-
-
-
-คำสั่งนี้เก็บ Database Volume ไว้ ห้ามเติม `-v` หากไม่ต้องการลบข้อมูล
-
-
-
-\## 5. ทดสอบ Frontend
-
-
-
-จาก `frontend/`:
-
-
-
-```powershell
-
-pnpm test
-
-pnpm test:coverage
-
 pnpm build
-
+pnpm test:coverage
 ```
 
+## Backend (PowerShell)
 
-
-\## 6. ทดสอบ Backend
-
-
-
-จาก `backend/` โดยใช้ Java 21 และมี PostgreSQL สำหรับ Test Environment:
-
-
+การทดสอบ backend ต้องใช้ PostgreSQL แยกจากข้อมูลพัฒนา ดูคำสั่งสร้างฐานข้อมูลทดสอบใน [README](../README.md) จากนั้นรันใน `backend/` (PowerShell):
 
 ```powershell
-
+$env:DB_URL = "jdbc:postgresql://localhost:55433/boardly_db"
+$env:DB_USERNAME = "boardly"
+$env:DB_PASSWORD = "boardly"
 mvn -B clean verify
-
 ```
 
+CI ใช้ PostgreSQL 16 แยกสำหรับการทดสอบ
 
+## ทั้งระบบ (PowerShell)
 
-CI ใช้ PostgreSQL 16 สำหรับ Backend Tests
+จากโฟลเดอร์หลัก ใช้คำสั่งเริ่มต้นใน [README](../README.md) หากต้องดูสถานะหรือหยุด:
 
+```powershell
+docker compose ps
+docker compose down
+```
 
+Frontend อยู่ที่ `http://localhost:8443`, backend health ที่ `http://localhost:8080/api/health` และ PostgreSQL ที่ `localhost:5433` อย่าใช้ `docker compose down -v` หากต้องเก็บข้อมูลเดิม
 
-\## 7. โครงสร้าง Repository
-
-
-
-\- `frontend/` — React Application และ Nginx Configuration
-
-\- `backend/` — Spring Boot REST API
-
-\- `database/` — Schema, Seed Data และ Migrations
-
-\- `k8s/` — Kubernetes Base Manifests
-
-\- `k8s/local/` — Local Minikube Overlay
-
-\- `docs/` — คู่มือการพัฒนาและการ Deploy
-
-\- `.github/workflows/` — CI และ Manual Release Workflows
-
-\- `compose.yaml` — Local Docker Compose Stack
-
-
-
-\## 8. แนวทางการทำงาน
-
-
-
-\- ใช้ pnpm และ `pnpm-lock.yaml` สำหรับ Frontend
-
-\- ใช้ Java 21 สำหรับ Backend
-
-\- อย่า Commit `.env`, Password, JWT Secret หรือ Credential
-
-\- ตรวจสอบ `git diff` และทดสอบก่อน Commit
-
-\- ใช้ Pull Request และรอ CI ผ่านก่อน Merge
-
-\- อ่าน `LOCAL\_KUBERNETES.md` สำหรับ Local Kubernetes
-
-\- อ่าน `RELEASE.md` สำหรับ CI/CD และ Release
-
+โครงสร้างหลัก: `frontend/`, `backend/`, `database/`, `k8s/` และ `.github/workflows/` อย่าบันทึกรหัสผ่าน, `.env` หรือ kubeconfig ลง Git

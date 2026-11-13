@@ -1,86 +1,122 @@
-name: Publish and deploy
+name: Build and deploy locally
 
 on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
   contents: read
-  actions: read
+
+concurrency:
+  group: boardly-release-minikube
+  cancel-in-progress: false
 
 jobs:
-  publish:
-    name: Publish Docker images
-    if: github.ref == 'refs/heads/main'
+  gate:
+    name: Verify main CI and release target
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.repository.id == github.event.repository.id &&
+       github.event.workflow_run.head_repository.id == github.event.repository.id &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
-    env:
-      IMAGE_REGISTRY: ${{ secrets.IMAGE_REGISTRY }}
-      IMAGE_TAG: ${{ github.sha }}
-      REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
-      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      sha: ${{ steps.verify.outputs.sha }}
+      eligible: ${{ steps.verify.outputs.eligible }}
     steps:
-      - name: Require successful CI for this commit
+      # workflow_run has elevated access; only execute code from trusted main here.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Verify CI and current main commit
+        id: verify
         uses: actions/github-script@v9
+        env:
+          MINIKUBE_RUNNER_LABEL: ${{ vars.MINIKUBE_RUNNER_LABEL }}
         with:
           script: |
+            const { checkCiRun } = require('./.github/scripts/release-guard.cjs')
             const { owner, repo } = context.repo
-            const { data: { workflow_runs: runs } } = await github.rest.actions.listWorkflowRuns({
-              owner, repo, workflow_id: 'ci.yml', head_sha: context.sha,
-              branch: 'main', event: 'push', per_page: 100
-            })
-            const run = runs
-              .filter(item => item.head_sha === context.sha && item.event === 'push' && item.head_branch === 'main')
-              .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0]
-            if (!run || run.conclusion !== 'success') {
-              core.setFailed(`No successful main-branch CI run for ${context.sha}`)
+            let run
+            if (context.eventName === 'workflow_run') {
+              run = context.payload.workflow_run
+            } else if (context.eventName === 'workflow_dispatch' && context.ref === 'refs/heads/main') {
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                owner, repo, workflow_id: 'ci.yml', head_sha: context.sha,
+                branch: 'main', event: 'push', per_page: 100
+              })
+              run = data.workflow_runs
+                .filter(item => item.head_sha === context.sha && item.event === 'push' && item.head_branch === 'main')
+                .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0]
+            } else {
+              core.setFailed('Manual retries must run on main')
+              return
+            }
+            if (!run) {
+              core.setFailed(`No push-triggered main CI run for ${context.sha}`)
               return
             }
             const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
               owner, repo, run_id: run.id, filter: 'latest', per_page: 100
             })
-            const required = ['Frontend (build + Vitest)', 'Backend (mvn verify)', 'E2E (Cypress)']
-            const missing = required.filter(name => !jobs.some(job => job.name === name && job.conclusion === 'success'))
-            if (missing.length) core.setFailed(`Required CI jobs did not pass: ${missing.join(', ')}`)
-            else core.info(`Validated CI run: ${run.html_url}`)
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-      - name: Build and publish images
-        shell: bash
-        run: |
-          set -euo pipefail
-          : "${IMAGE_REGISTRY:?Set the IMAGE_REGISTRY secret}"
-          : "${REGISTRY_USERNAME:?Set the REGISTRY_USERNAME secret}"
-          : "${REGISTRY_PASSWORD:?Set the REGISTRY_PASSWORD secret}"
-          docker build -t "${IMAGE_REGISTRY}/boardly-backend:${IMAGE_TAG}" ./backend
-          docker build -t "${IMAGE_REGISTRY}/boardly-frontend:${IMAGE_TAG}" -f frontend/Dockerfile .
-          export DOCKER_CONFIG="$(mktemp -d)"
-          trap 'rm -rf "$DOCKER_CONFIG"' EXIT
-          printf '%s' "$REGISTRY_PASSWORD" | docker login "${IMAGE_REGISTRY%%/*}" --username "$REGISTRY_USERNAME" --password-stdin
-          docker push "${IMAGE_REGISTRY}/boardly-backend:${IMAGE_TAG}"
-          docker push "${IMAGE_REGISTRY}/boardly-frontend:${IMAGE_TAG}"
+            const problem = checkCiRun(run, jobs, context.payload.repository.id)
+            if (problem) {
+              core.setFailed(problem)
+              return
+            }
+            const { data: branch } = await github.rest.repos.getBranch({ owner, repo, branch: 'main' })
+            if (run.head_sha !== branch.commit.sha) {
+              core.info(`Skipped superseded release ${run.head_sha}; main is ${branch.commit.sha}`)
+              await core.summary.addRaw(`Skipped superseded release ${run.head_sha}; main is ${branch.commit.sha}`).write()
+              return
+            }
+            const label = process.env.MINIKUBE_RUNNER_LABEL
+            if (!label || !label.trim() || ['self-hosted', 'linux', 'x64'].includes(label.toLowerCase())) {
+              core.setFailed('Set MINIKUBE_RUNNER_LABEL to the verified unique label of the authorized local Minikube runner')
+              return
+            }
+            core.setOutput('sha', run.head_sha)
+            core.setOutput('eligible', 'true')
+            await core.summary.addRaw(`CI passed: ${run.html_url}; release commit: ${run.head_sha}`).write()
 
   deploy:
     name: Deploy to Minikube
-    needs: publish
-    runs-on: self-hosted
+    needs: gate
+    if: needs.gate.outputs.eligible == 'true'
+    timeout-minutes: 45
+    runs-on: [self-hosted, linux, "${{ vars.MINIKUBE_RUNNER_LABEL }}"]
     environment: minikube
-    concurrency:
-      group: boardly-deploy-minikube
-      cancel-in-progress: false
     env:
-      IMAGE_REGISTRY: ${{ secrets.IMAGE_REGISTRY }}
-      IMAGE_TAG: ${{ github.sha }}
-      REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
-      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
-      K8S_DB_USERNAME: ${{ secrets.K8S_DB_USERNAME }}
-      K8S_DB_PASSWORD: ${{ secrets.K8S_DB_PASSWORD }}
-      K8S_JWT_SECRET: ${{ secrets.K8S_JWT_SECRET }}
+      IMAGE_TAG: ${{ needs.gate.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ needs.gate.outputs.sha }}
           persist-credentials: false
-      - name: Deploy and smoke test
+      - name: Build and load exact tested revision
         shell: bash
-        run: bash .github/scripts/deploy.sh
+        run: bash .github/scripts/deploy.sh build
+      - name: Skip superseded release immediately before deployment
+        id: current
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { owner, repo } = context.repo
+            const { data: branch } = await github.rest.repos.getBranch({ owner, repo, branch: 'main' })
+            if (branch.commit.sha === process.env.IMAGE_TAG) {
+              core.setOutput('current', 'true')
+            } else {
+              await core.summary.addRaw(`Skipped superseded release ${process.env.IMAGE_TAG}; main is ${branch.commit.sha}`).write()
+            }
+      - name: Deploy and smoke test
+        if: steps.current.outputs.current == 'true'
+        shell: bash
+        run: bash .github/scripts/deploy.sh deploy
