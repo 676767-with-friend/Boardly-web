@@ -49,8 +49,51 @@ describe('BranchSearchDropdown Component Test Suite', () => {
     )
 
     fireEvent.click(screen.getByRole('button'))
+    fireEvent.keyDown(screen.getByRole('button'), { key: 'Escape' })
+    fireEvent.click(screen.getByRole('button'))
     fireEvent.click(screen.getByText('Siam Branch'))
 
     expect(handleChange).toHaveBeenCalledWith('b1')
+  })
+
+  it('filters active locations, reports no matches, and closes on Escape', () => {
+    render(
+      <BranchSearchDropdown
+        value="b1"
+        onChange={vi.fn()}
+        onlyActive
+        branches={mockBranches}
+      />,
+    )
+
+    expect(screen.getByText('Siam Branch')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button'))
+    expect(screen.getByRole('option', { name: /Siam Branch/ })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: /Silom Branch/ })).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByPlaceholderText('Search branch...'), {
+      target: { value: 'nowhere' },
+    })
+    expect(screen.getByText('No branches found')).toBeInTheDocument()
+    fireEvent.keyDown(screen.getByRole('listbox').parentElement!, {
+      key: 'Escape',
+    })
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+
+  it('searches by district and shows the district when hours are missing', () => {
+    render(
+      <BranchSearchDropdown
+        value={null}
+        onChange={vi.fn()}
+        branches={mockBranches}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button'))
+    fireEvent.change(screen.getByPlaceholderText('Search branch...'), {
+      target: { value: 'Bang Rak' },
+    })
+    expect(screen.getByRole('option', { name: /Silom Branch/ })).toBeInTheDocument()
+    expect(screen.getByText('Bang Rak')).toBeInTheDocument()
   })
 })

@@ -48,8 +48,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (principal == null) {
                 throw new JwtService.InvalidJwtException();
             }
-            SecurityContextHolder.getContext().setAuthentication(
-                    new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities()));
+            UsernamePasswordAuthenticationToken authentication =
+                    new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+            // Keep the session id of this access token so endpoints such as logout can revoke exactly this session.
+            authentication.setDetails(claims.sessionId());
+            SecurityContextHolder.getContext().setAuthentication(authentication);
             filterChain.doFilter(request, response);
         } catch (JwtService.InvalidJwtException ex) {
             SecurityContextHolder.clearContext();

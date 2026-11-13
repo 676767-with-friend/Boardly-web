@@ -14,6 +14,7 @@ import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -48,8 +49,10 @@ public class AuthController {
     @PostMapping("/auth/logout")
     public ResponseEntity<Void> logout(
             @RequestBody(required = false) LogoutRequest request,
-            @AuthenticationPrincipal AuthUser currentUser) {
-        authService.logout(request, currentUser == null ? null : currentUser.id());
+            Authentication authentication) {
+        // JwtAuthenticationFilter stores the access token's session id as the authentication details.
+        UUID sessionId = authentication != null && authentication.getDetails() instanceof UUID id ? id : null;
+        authService.logout(request, sessionId);
         return ResponseEntity.noContent().build();
     }
 

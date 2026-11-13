@@ -6,9 +6,11 @@ import {
   MyReservationsApiPage,
   ReservationConfirmationPage,
   ReservationPage,
+  StaffCheckInApiPage,
+  StaffLiveTablesApiPage,
 } from "./ReservationPages"
 import { branchesApi } from "@/services/branchesApi"
-import { reservationsApi } from "@/services/reservationsApi"
+import { reservationsApi, staffReservationsApi } from "@/services/reservationsApi"
 
 vi.mock("@/auth/AuthProvider", () => ({
   useAuth: () => ({
@@ -25,7 +27,12 @@ vi.mock("@/services/reservationsApi", () => ({
     mine: vi.fn(),
     cancel: vi.fn(),
   },
-  staffReservationsApi: {},
+  staffReservationsApi: {
+    liveTables: vi.fn(),
+    checkout: vi.fn(),
+    checkIn: vi.fn(),
+    walkIn: vi.fn(),
+  },
 }))
 
 const branch = {
@@ -84,6 +91,10 @@ async function reachSummary(browser: ReturnType<typeof userEvent.setup>) {
 describe("ReservationPage", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(staffReservationsApi.liveTables).mockReset().mockResolvedValue([])
+    vi.mocked(staffReservationsApi.checkout).mockReset().mockResolvedValue({} as never)
+    vi.mocked(staffReservationsApi.checkIn).mockReset().mockResolvedValue({} as never)
+    vi.mocked(staffReservationsApi.walkIn).mockReset().mockResolvedValue({} as never)
     vi.mocked(branchesApi.list).mockResolvedValue([branch])
     vi.mocked(reservationsApi.availableTables).mockResolvedValue({
       startsAt: "2026-10-30T12:00:00+07:00",
@@ -497,5 +508,158 @@ describe("ReservationPage", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Cancel" }))
     expect(await screen.findByText("Cancellation rejected")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled()
+  })
+
+  it("covers staff live-table filters, table details, assignment, check-in, and checkout", async () => {
+    vi.mocked(branchesApi.list).mockResolvedValue([
+      branch,
+      { ...branch, id: "branch-2", name: "Boardly Silom" },
+      { ...branch, id: "inactive", status: "inactive" },
+    ])
+    const tables = [
+      {
+        id: "available", code: "A1", zone: "Main", minPlayers: 2, maxPlayers: 4,
+        status: "available", assignable: true, assignmentBlockCode: null,
+        assignmentBlockReason: null, sessionId: null, reservationId: null,
+        reservationNumber: null, client: null, players: null,
+        reservationStartsAt: null, reservationEndsAt: null,
+        nextReservationNumber: null, nextReservationStartsAt: null,
+        nextReservationEndsAt: null, checkInAt: null,
+        serverTime: "2026-10-30T12:00:00+07:00", bookedDurationMinutes: null,
+        elapsedSeconds: 0, overtimeSeconds: 0, baseFee: null, overtimeFee: null,
+        runningFee: null,
+      },
+      {
+        id: "reserved", code: "B1", zone: "Window", minPlayers: 2, maxPlayers: 4,
+        status: "reserved", assignable: false, assignmentBlockCode: "RESERVED",
+        assignmentBlockReason: "Reserved for a customer.", sessionId: null,
+        reservationId: "rsv-1", reservationNumber: "RSV-1", client: "Ada",
+        players: 2, reservationStartsAt: "2026-10-30T12:00:00+07:00",
+        reservationEndsAt: "2026-10-30T14:00:00+07:00", nextReservationNumber: null,
+        nextReservationStartsAt: null, nextReservationEndsAt: null,
+        checkInAt: null, serverTime: "2026-10-30T12:00:00+07:00",
+        bookedDurationMinutes: 120, elapsedSeconds: 0, overtimeSeconds: 0,
+        baseFee: null, overtimeFee: null, runningFee: null,
+      },
+      {
+        id: "occupied", code: "C1", zone: "Main", minPlayers: 2, maxPlayers: 4,
+        status: "occupied", assignable: false, assignmentBlockCode: "ACTIVE_SESSION",
+        assignmentBlockReason: "Session in progress.", sessionId: "session-1",
+        reservationId: null, reservationNumber: null, client: "Grace",
+        players: 3, reservationStartsAt: null, reservationEndsAt: null,
+        nextReservationNumber: null, nextReservationStartsAt: null,
+        nextReservationEndsAt: null, checkInAt: "2026-10-30T11:00:00+07:00",
+        serverTime: "2026-10-30T12:00:00+07:00", bookedDurationMinutes: 120,
+        elapsedSeconds: 3600, overtimeSeconds: 0, baseFee: 200, overtimeFee: 0,
+        runningFee: 200,
+      },
+      {
+        id: "blocked", code: "D1", zone: "Window", minPlayers: 2, maxPlayers: 4,
+        status: "available", assignable: false, assignmentBlockCode: "NEXT_BOOKING",
+        assignmentBlockReason: "A reservation starts soon.", sessionId: null,
+        reservationId: null, reservationNumber: null, client: null, players: null,
+        reservationStartsAt: null, reservationEndsAt: null,
+        nextReservationNumber: "RSV-NEXT",
+        nextReservationStartsAt: "2026-10-30T13:00:00+07:00",
+        nextReservationEndsAt: "2026-10-30T15:00:00+07:00", checkInAt: null,
+        serverTime: "2026-10-30T12:00:00+07:00", bookedDurationMinutes: null,
+        elapsedSeconds: 0, overtimeSeconds: 0, baseFee: null, overtimeFee: null,
+        runningFee: null,
+      },
+    ] as never
+    vi.mocked(staffReservationsApi.liveTables).mockResolvedValue(tables)
+    vi.mocked(staffReservationsApi.walkIn)
+      .mockRejectedValueOnce(new Error("Walk-in failed"))
+      .mockResolvedValueOnce({} as never)
+    vi.mocked(staffReservationsApi.checkIn)
+      .mockRejectedValueOnce(new Error("Check-in failed"))
+      .mockResolvedValueOnce({} as never)
+    vi.mocked(staffReservationsApi.checkout)
+      .mockRejectedValueOnce(new Error("Checkout failed"))
+      .mockResolvedValueOnce({} as never)
+
+    const browser = userEvent.setup()
+    render(<StaffLiveTablesApiPage />)
+    expect(await screen.findByRole("heading", { name: "Live Tables" })).toBeInTheDocument()
+    expect(staffReservationsApi.liveTables).toHaveBeenCalledWith(branch.id, 4)
+    expect(screen.queryByText("No tables are available for this branch.")).not.toBeInTheDocument()
+
+    await browser.click(screen.getByRole("button", { name: /A1/ }))
+    await browser.click(screen.getAllByRole("button", { name: "Assign Walk-In" })[0])
+    await screen.findByRole("heading", { name: "Assign Walk-In Client" })
+    expect(screen.getByRole("button", { name: "Assign & Check In" })).toBeDisabled()
+    await browser.type(screen.getByLabelText("Guest name"), "Walk-in Guest")
+    await browser.type(screen.getByLabelText("Phone"), "123")
+    await browser.click(screen.getByRole("button", { name: "Assign & Check In" }))
+    expect(screen.getByText(/กรุณากรอกหมายเลขโทรศัพท์ไทย/)).toBeInTheDocument()
+    await browser.clear(screen.getByLabelText("Phone"))
+    await browser.type(screen.getByLabelText("Phone"), "0812345678")
+    await browser.click(screen.getByRole("button", { name: "Assign & Check In" }))
+    expect(await screen.findByText("Walk-in failed")).toBeInTheDocument()
+    await browser.click(screen.getByRole("button", { name: "Assign & Check In" }))
+    await waitFor(() => expect(staffReservationsApi.walkIn).toHaveBeenCalledTimes(2))
+
+    await browser.click(screen.getByRole("button", { name: /B1/ }))
+    expect(screen.getAllByText("Cannot assign: Reserved for a customer.")).toHaveLength(2)
+    await browser.click(screen.getAllByRole("button", { name: "Check In Client" })[0])
+    expect(await screen.findByText("Check-in failed")).toBeInTheDocument()
+    await browser.click(screen.getAllByRole("button", { name: "Check In Client" })[0])
+    await waitFor(() => expect(staffReservationsApi.checkIn).toHaveBeenCalledTimes(2))
+
+    await browser.click(screen.getByRole("button", { name: /C1/ }))
+    expect(screen.getAllByText("Grace")).toHaveLength(2)
+    expect(screen.getByText("Running fee")).toBeInTheDocument()
+    await browser.click(screen.getAllByRole("button", { name: "End Session & Check Out" })[0])
+    expect(await screen.findByText("Checkout failed")).toBeInTheDocument()
+    await browser.click(screen.getAllByRole("button", { name: "End Session & Check Out" })[0])
+    await waitFor(() => expect(staffReservationsApi.checkout).toHaveBeenCalledWith("session-1"))
+
+    await browser.click(screen.getByRole("button", { name: /D1/ }))
+    expect(screen.getAllByText("Cannot assign: A reservation starts soon.")).toHaveLength(2)
+    await browser.click(screen.getAllByRole("button", { name: "Close table details" })[0])
+    await browser.selectOptions(screen.getByLabelText("Walk-in party size"), "6")
+    await waitFor(() => expect(staffReservationsApi.liveTables).toHaveBeenLastCalledWith(branch.id, 6))
+    await browser.click(screen.getByRole("button", { name: /Boardly Central/ }))
+    await browser.click(screen.getByRole("option", { name: /Boardly Silom/ }))
+    await waitFor(() => expect(staffReservationsApi.liveTables).toHaveBeenLastCalledWith("branch-2", 6))
+  })
+
+  it("handles staff table loading failures and check-in lookup outcomes", async () => {
+    vi.mocked(branchesApi.list).mockRejectedValueOnce({})
+    const branchError = render(<StaffLiveTablesApiPage />)
+    expect(await screen.findByText("Unable to load branches.")).toBeInTheDocument()
+    branchError.unmount()
+
+    vi.mocked(branchesApi.list).mockResolvedValueOnce([branch])
+    vi.mocked(staffReservationsApi.liveTables).mockResolvedValueOnce([])
+    const emptyFloor = render(<StaffLiveTablesApiPage />)
+    expect(await screen.findByText("No tables are available for this branch.")).toBeInTheDocument()
+    emptyFloor.unmount()
+
+    const lookup = render(<StaffCheckInApiPage />)
+    await userEvent.click(screen.getByRole("button", { name: "Check In" }))
+    expect(screen.getByText("Enter the reservation ID from the reservation record.")).toBeInTheDocument()
+    await userEvent.type(screen.getByPlaceholderText("Paste reservation UUID"), " reservation-1 ")
+    vi.mocked(staffReservationsApi.checkIn).mockResolvedValueOnce({
+      id: "table-1", code: "A1", zone: "Main", minPlayers: 2, maxPlayers: 4,
+      status: "occupied", assignable: false, assignmentBlockCode: null,
+      assignmentBlockReason: null, sessionId: "session-1", reservationId: "reservation-1",
+      reservationNumber: "RSV-1001", client: null, players: null,
+      reservationStartsAt: null, reservationEndsAt: null, nextReservationNumber: null,
+      nextReservationStartsAt: null, nextReservationEndsAt: null, checkInAt: null,
+      serverTime: "2026-10-30T12:00:00+07:00", bookedDurationMinutes: null,
+      elapsedSeconds: 0, overtimeSeconds: 0, baseFee: null, overtimeFee: null,
+      runningFee: null,
+    })
+    await userEvent.click(screen.getByRole("button", { name: "Check In" }))
+    expect(await screen.findByText("Reservation guest")).toBeInTheDocument()
+    expect(staffReservationsApi.checkIn).toHaveBeenCalledWith("reservation-1")
+    lookup.unmount()
+
+    render(<StaffCheckInApiPage />)
+    await userEvent.type(screen.getByPlaceholderText("Paste reservation UUID"), "bad-id")
+    vi.mocked(staffReservationsApi.checkIn).mockRejectedValueOnce({})
+    await userEvent.click(screen.getByRole("button", { name: "Check In" }))
+    expect(await screen.findByText("Unable to check in this reservation.")).toBeInTheDocument()
   })
 })

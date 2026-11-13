@@ -48,4 +48,41 @@ describe('ProductCard Component Test Suite', () => {
     fireEvent.click(screen.getByText('Catan'))
     expect(handleView).toHaveBeenCalledTimes(1)
   })
+
+  it('toggles the like state and handles cards without a sale price or new badge', async () => {
+    const product = { ...mockProduct, salePrice: null, isNew: false }
+    const { container } = render(
+      <ProductCard product={product} onView={vi.fn()} onAddToCart={vi.fn()} />,
+    )
+    expect(screen.queryByText('New')).not.toBeInTheDocument()
+    expect(screen.getByText('฿1,500')).toBeInTheDocument()
+    const like = container.querySelector('button')!
+    fireEvent.click(like)
+    expect(container.querySelector('svg')?.getAttribute('class')).toContain('fill-red-500')
+    fireEvent.click(like)
+    expect(container.querySelector('svg')?.getAttribute('class')).not.toContain('fill-red-500')
+  })
+
+  it('shows a fallback message for non-Error add failures and prevents adding out-of-stock items', async () => {
+    const onAddToCart = vi.fn().mockRejectedValue('offline')
+    render(
+      <ProductCard
+        product={{ ...mockProduct, stock: 0 }}
+        onView={vi.fn()}
+        onAddToCart={onAddToCart}
+      />,
+    )
+    expect(screen.getByRole('button', { name: /add to cart/i })).toBeDisabled()
+    // Invoke through the callback path with stock available to cover error handling.
+    const { unmount } = render(
+      <ProductCard
+        product={mockProduct}
+        onView={vi.fn()}
+        onAddToCart={onAddToCart}
+      />,
+    )
+    fireEvent.click(screen.getAllByRole('button', { name: /add to cart/i })[1])
+    expect(await screen.findByText('Unable to add this game to your cart.')).toBeInTheDocument()
+    unmount()
+  })
 })

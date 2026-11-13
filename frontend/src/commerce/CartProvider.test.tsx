@@ -343,4 +343,37 @@ describe('CartProvider', () => {
       )
     })
   })
+
+  it('rejects a non-positive cart update quantity before making the API call', async () => {
+    function InvalidUpdateHarness() {
+      const cart = useCart()
+      return <><output data-testid="loading">{cart.loading ? 'loading' : 'ready'}</output><button onClick={() => void cart.updateItem('line-1', 0).catch(() => undefined)}>invalid update</button></>
+    }
+    render(<CartProvider><InvalidUpdateHarness /></CartProvider>)
+    await waitForCartReady()
+    await act(async () => screen.getByRole('button', { name: 'invalid update' }).click())
+    await waitFor(() => expect(cartApi.updateItem).not.toHaveBeenCalled())
+  })
+
+  it('clears the cart and shows a fallback when loading fails', async () => {
+    vi.mocked(cartApi.get).mockRejectedValueOnce({})
+    render(
+      <CartProvider>
+        <Harness />
+      </CartProvider>,
+    )
+    await waitFor(() => {
+      expect(screen.getByTestId('loading')).toHaveTextContent('ready')
+      expect(screen.getByTestId('error')).toHaveTextContent('Unable to update your cart.')
+    })
+    expect(screen.getByTestId('count')).toHaveTextContent('0')
+  })
+
+  it('requires the provider when using the cart hook', () => {
+    function InvalidConsumer() {
+      useCart()
+      return null
+    }
+    expect(() => render(<InvalidConsumer />)).toThrow('useCart must be used inside CartProvider')
+  })
 })
