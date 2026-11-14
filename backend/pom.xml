@@ -79,6 +79,12 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<configuration>
+					<!-- Cached Spring test contexts each own a pool. Keep these small
+					     to leave room within PostgreSQL's default 100 connections. -->
+					<systemPropertyVariables>
+						<spring.datasource.hikari.maximum-pool-size>4</spring.datasource.hikari.maximum-pool-size>
+						<spring.datasource.hikari.minimum-idle>1</spring.datasource.hikari.minimum-idle>
+					</systemPropertyVariables>
 					<environmentVariables>
 						<SPRING_PROFILES_ACTIVE>test</SPRING_PROFILES_ACTIVE>
 						<JWT_SECRET>boardly-test-only-jwt-secret-at-least-32-characters</JWT_SECRET>

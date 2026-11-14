@@ -13,7 +13,7 @@ import org.springframework.http.HttpStatus;
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = {"management.server.port=0", "spring.datasource.hikari.maximum-pool-size=2"})
+    properties = "management.server.port=0")
 @AutoConfigureObservability(tracing = false)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class ManagementApiTests {
