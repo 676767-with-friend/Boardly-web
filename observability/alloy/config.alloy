@@ -1,0 +1,15 @@
+local.file_match "boardly" {
+  path_targets = [{"__path__" = "/var/log/boardly/application.json", "service_name" = "boardly-backend"}]
+  sync_period = "5s"
+}
+
+loki.source.file "boardly" {
+  targets    = local.file_match.boardly.targets
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

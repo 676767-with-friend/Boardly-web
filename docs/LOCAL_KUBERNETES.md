@@ -102,4 +102,4 @@ minikube -p boardly-dev image ls
 
 มีแล้ว: /api/health, backend readiness/liveness, frontend readiness, PostgreSQL pg_isready, container stdout/stderr และ CI failure logs
 
-ยังขาด: health ไม่ตรวจ DB, ไม่มี application metrics/Prometheus scraping, dashboard, alerts หรือระบบรวม logs พร้อม retention/search ต้องตกลง scope และหลักฐานสาธิตเพิ่มเติม เช่น Prometheus/Grafana และ Loki ก่อนติดตั้ง งานนี้ไม่ได้เพิ่ม stack และยังไม่สรุปว่างานวิชาครบ
+สำหรับ Kubernetes ยังต้องติดตั้ง Prometheus/Grafana, Loki และ Tempo เพิ่ม ส่วน Docker Compose มี [Observability stack](OBSERVABILITY.md) พร้อม metrics, logs, traces, retention และ alert rules แล้ว `/api/health` ยังคงเป็น liveness เดิม; Actuator health บน management port ตรวจ DB ได้ ยังไม่สรุปว่างานวิชาครบจนมีหลักฐานจาก deployment เป้าหมาย

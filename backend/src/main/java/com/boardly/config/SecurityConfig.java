@@ -2,6 +2,8 @@ package com.boardly.config;
 
 import com.boardly.auth.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
+import org.springframework.boot.actuate.autoconfigure.security.servlet.EndpointRequest;
+import org.springframework.core.annotation.Order;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -30,6 +32,16 @@ public class SecurityConfig {
         return username -> {
             throw new UsernameNotFoundException("Password authentication is handled by Boardly auth endpoints");
         };
+    }
+
+    // Actuator is served only by management.server.port, never by the frontend proxy.
+    @Bean
+    @Order(1)
+    public SecurityFilterChain managementFilterChain(HttpSecurity http) throws Exception {
+        return http.securityMatcher(EndpointRequest.toAnyEndpoint())
+            .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .build();
     }
 
     @Bean

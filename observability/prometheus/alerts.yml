@@ -1,0 +1,17 @@
+groups:
+  - name: boardly
+    rules:
+      - alert: BoardlyBackendDown
+        expr: up{job="boardly-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Boardly backend cannot be scraped
+      - alert: BoardlyHighErrorRate
+        expr: sum(rate(http_server_requests_seconds_count{job="boardly-backend",status=~"5.."}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count{job="boardly-backend"}[5m])), 0.001) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Boardly HTTP 5xx exceeds 5% for 5 minutes
