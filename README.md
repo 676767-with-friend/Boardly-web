@@ -109,7 +109,7 @@ Release guard tests จาก root: `node .github/scripts/release-guard.test.cjs
 
 ## CI/CD และ Vercel
 
-CI บน GitHub-hosted runners ต้องผ่านครบ: `Frontend (build + Vitest)`, `Backend (mvn verify)` และ `E2E (Cypress)` PR ไม่ใช้ persistent runner
+CI บน GitHub-hosted runners ต้องผ่านครบ: `Frontend (build + Vitest)`, `Backend (mvn verify)`, `E2E (Cypress)` และ `Observability (Grafana metrics, logs, traces)` PR ไม่ใช้ persistent runner
 
 Release workflow ถูกออกแบบให้เริ่มหลัง push CI บน main ผ่าน ใช้ SHA ที่ทดสอบจริง checkout และ tag images บน dedicated Linux self-hosted runner จากนั้น load เข้า Minikube profile `boardly-dev` ไม่ publish images ภายนอก มี manual retry บน main ผ่าน gate เดียวกัน ข้าม revision ที่ main แทนที่แล้ว และ serialize deployment โดยไม่ยกเลิกงานที่กำลังรัน
 
@@ -140,4 +140,10 @@ kubectl --context boardly-dev -n boardly port-forward svc/frontend 8088:80
 - Image หาไม่พบ: ตรวจ profile, SHA tags และ image loading ใน profile เดียวกับ runner
 - Runner ไม่รับงาน: ตรวจ label, online และ environment approval ตามคู่มือ Release
 
-มี health endpoint, probes, container logs และ CI failure logs แต่ health ยังไม่ตรวจ DB dependency และยังไม่มี metrics dashboard/alerts หรือ log aggregation/retention จึงยังไม่ถือว่าข้อกำหนด monitoring/logging ของวิชาครบ ดูรายละเอียดงานที่เหลือในคู่มือ Minikube
+เพิ่ม Grafana + Prometheus (metrics/alert rules) + Loki/Alloy (JSON logs) + Tempo (traces) สำหรับ Docker Compose พร้อม Boardly dashboard และ log ↔ trace correlation:
+
+```sh
+docker compose -f compose.yaml -f compose.observability.yaml up -d --build
+```
+
+เปิด http://localhost:3000 ใช้ `admin` / `boardly-local-admin` แล้วไป **Dashboards → Boardly → Boardly Overview** ดู [คู่มือ Observability](docs/OBSERVABILITY.md) สำหรับ smoke test, retention และ configuration ส่วน Kubernetes ยังต้องติดตั้ง monitoring แยกตามคู่มือ Minikube

@@ -1,0 +1,84 @@
+# Run together with compose.yaml. Local development only.
+x-internal-environment: &internal-environment
+  NO_PROXY: localhost,127.0.0.1,backend,prometheus,loki,tempo,alloy,grafana
+  no_proxy: localhost,127.0.0.1,backend,prometheus,loki,tempo,alloy,grafana
+
+services:
+  backend:
+    environment:
+      <<: *internal-environment
+      SPRING_PROFILES_ACTIVE: dev,observability
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://tempo:4318/v1/traces
+      TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-1.0}
+    volumes:
+      - boardly_logs:/var/log/boardly
+
+  prometheus:
+    environment: *internal-environment
+    image: prom/prometheus:v3.2.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    restart: unless-stopped
+
+  loki:
+    environment: *internal-environment
+    image: grafana/loki:3.4.2
+    command: -config.file=/etc/loki/config.yml
+    volumes:
+      - ./observability/loki/config.yml:/etc/loki/config.yml:ro
+      - loki_data:/loki
+    restart: unless-stopped
+
+  tempo:
+    environment: *internal-environment
+    image: grafana/tempo:2.7.2
+    command: -config.file=/etc/tempo/config.yml
+    volumes:
+      - ./observability/tempo/config.yml:/etc/tempo/config.yml:ro
+      - tempo_data:/var/tempo
+    restart: unless-stopped
+
+  alloy:
+    environment: *internal-environment
+    image: grafana/alloy:v1.7.5
+    command: run --storage.path=/var/lib/alloy/data /etc/alloy/config.alloy
+    volumes:
+      - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - boardly_logs:/var/log/boardly:ro
+      - alloy_data:/var/lib/alloy/data
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.6.0
+    ports:
+      - "127.0.0.1:${BOARDLY_GRAFANA_PORT:-3000}:3000"
+    environment:
+      <<: *internal-environment
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-boardly-local-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+    restart: unless-stopped
+
+volumes:
+  boardly_logs:
+  prometheus_data:
+  loki_data:
+  tempo_data:
+  alloy_data:
+  grafana_data:
