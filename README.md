@@ -140,4 +140,4 @@ kubectl --context boardly-dev -n boardly port-forward svc/frontend 8088:80
 - Image หาไม่พบ: ตรวจ profile, SHA tags และ image loading ใน profile เดียวกับ runner
 - Runner ไม่รับงาน: ตรวจ label, online และ environment approval ตามคู่มือ Release
 
-มี health endpoint, probes, container logs และ CI failure logs แต่ health ยังไม่ตรวจ DB dependency และยังไม่มี metrics dashboard/alerts หรือ log aggregation/retention จึงยังไม่ถือว่าข้อกำหนด monitoring/logging ของวิชาครบ ดูรายละเอียดงานที่เหลือในคู่มือ Minikube
+มี health/readiness endpoint ที่รวมสถานะฐานข้อมูล, Prometheus metrics, distributed traces, Loki log aggregation และ Grafana dashboard สำหรับ local development ดู [คู่มือ Observability](docs/OBSERVABILITY.md) สำหรับคำสั่งเปิด stack งานนี้ยังไม่ตั้ง alerting และไม่เปลี่ยน production deployment
